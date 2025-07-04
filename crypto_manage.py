@@ -3,10 +3,8 @@ import time
 import ccxt
 import pandas as pd
 from datetime import datetime
-
+from logger import logger
 from send_email import send_email_report
-
-
 
 
 def continuous_live_data(interval=5):
@@ -59,7 +57,7 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
     - A dictionary with candle data: timestamp, open, high, low, close, volume
     """
     try:
-        print(f"[{datetime.now()}] [get_previous_closed_candle]")
+        logger.info(f"[{datetime.now()}] [get_previous_closed_candle]")
         
         exchange = ccxt.binance()
         exchange.load_markets()
@@ -76,12 +74,12 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
         if df["is_doji"].items() == True:
             created_time = df["timestamp"][0]
             email_msg = f"Doji created in Symbol {symbol}, at: [{created_time}]."
-            print(f"Email Send: {email_msg}")
+            logger.info(f"Email Send: {email_msg}")
             send_email_report(email_msg)
-        print(df)
+        # print(df)
 
     except Exception as e:
-        print(f"[{datetime.now()}][get_previous_closed_candle] error due to :{e}.")
+        logger.error(f"[{datetime.now()}][get_previous_closed_candle] error due to :{e}.")
         get_previous_closed_candle()
         time.sleep(30)
 
@@ -110,11 +108,6 @@ def fetch_previous_data():
     print(f"Symbol: {symbol}")
     # print(df)
     print(detect_doji(df))
-
-
-
-fetch_previous_data()
-get_previous_closed_candle()
 
 # Status: Tested Working Fine.
 # def run_if_15_minute_multiple():
