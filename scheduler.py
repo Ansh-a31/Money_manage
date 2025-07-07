@@ -3,6 +3,8 @@ from datetime import datetime
 from crypto_manage import get_previous_closed_candle
 import time
 from logger import logger
+
+
 # Status: Tested Working Fine.
 def run_if_15_minute_multiple():
 

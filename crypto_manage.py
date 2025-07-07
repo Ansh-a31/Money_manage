@@ -1,4 +1,4 @@
-from cry.service import detect_doji
+from cry.service import check_trending, detect_doji, adjust_open_close
 import time
 import ccxt
 import pandas as pd
@@ -76,7 +76,7 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
             email_msg = f"Doji created in Symbol {symbol}, at: [{created_time}]."
             logger.info(f"Email Send: {email_msg}")
             send_email_report(email_msg)
-        # print(df)
+        print(df)
 
     except Exception as e:
         logger.error(f"[{datetime.now()}][get_previous_closed_candle] error due to :{e}.")
@@ -96,31 +96,18 @@ def fetch_previous_data():
     symbol = 'BTC/USDT'
 
     # Fetch the current ticker (includes last price, bid, ask, etc.)
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=10)
+    ohlcv = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=30)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
     df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
-
+    df = adjust_open_close(df)
     # df.to_csv('btc_ohlcv_1m.csv', index=False)
 
     # Print relevant data
     print(f"Symbol: {symbol}")
-    # print(df)
     print(detect_doji(df))
-
-# Status: Tested Working Fine.
-# def run_if_15_minute_multiple():
-
-#     print(f" [{datetime.now()}][run_if_15_minute_multiple] ")
-#     now = datetime.now()
+    print(check_trending(df))
     
-#     if now.minute % 2 == 0:
-#         get_previous_closed_candle()
 
-# # Run every minute
-# schedule.every(1).minutes.do(run_if_15_minute_multiple)
-# print(f"After{schedule.get_jobs()}")
-# print("Scheduler started. Waiting for 15-minute intervals...")
-# while True:
-#     schedule.run_pending()
+fetch_previous_data()
