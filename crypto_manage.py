@@ -6,7 +6,7 @@ from datetime import datetime
 from logger import logger
 from send_email import send_email_report
 
-
+# Status: Not working properly.
 def continuous_live_data(interval=5):
     """
     Fetches live BTC/USDT price every few seconds.
@@ -36,7 +36,7 @@ def continuous_live_data(interval=5):
             df = pd.DataFrame(data, columns=['timestamp', 'price', 'open'])
             # df.to_csv('live_btc_price.csv', index=False)
             print(df)
-            time.sleep(interval)
+            # time.sleep(interval)
     
     except KeyboardInterrupt:
         print("\nStopped live feed.")
@@ -88,26 +88,46 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
 
 
 
-def fetch_previous_data():
-    exchange = ccxt.binance()
-    # Load markets (needed to initialize market symbols properly)
-    exchange.load_markets()
+def fetch_previous_data(time_frame):
+    try:
+        logger.info(f"[{datetime.now()}] [fetch_previous_data]")
+        exchange = ccxt.binance()
+        # Load markets (needed to initialize market symbols properly)
+        exchange.load_markets()
 
-    symbol = 'BTC/USDT'
+        symbol = 'ETH/USDT'
+        # import ipdb;ipdb.set_trace()
+        # Fetch the current ticker (includes last price, bid, ask, etc.)
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=30)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-    # Fetch the current ticker (includes last price, bid, ask, etc.)
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe='15m', limit=30)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
+        df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
+        df = adjust_open_close(df)
+        # df.to_csv('btc_ohlcv_1m.csv', index=False)
 
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
-    df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
-    df = adjust_open_close(df)
-    # df.to_csv('btc_ohlcv_1m.csv', index=False)
+        # Print relevant data
+        print(f"Symbol: {symbol}")
+        print(f"timeframe:{time_frame}")
+        # print(detect_doji(df))
+        # import ipdb;ipdb.set_trace()
+        is_trending =check_trending(symbol,df)
+        print(is_trending)
 
-    # Print relevant data
-    print(f"Symbol: {symbol}")
-    print(detect_doji(df))
-    print(check_trending(df))
-    
+        if is_trending.get("state") == "Trending":
+            created_time = datetime.time(datetime.now())
+            trending_direction = is_trending.get("direction")
+            email_msg = f"{symbol} currently trending in {trending_direction} on TF: {time_frame}, at: [{created_time}]."
+            logger.info(f"Email Send: {email_msg}")
+            send_email_report(email_msg)
+        # print(df)
+        
+        elif time_frame == "1h":
+            return {"msg":f"Not trending at {time_frame}."}
+        fetch_previous_data("1h")
+    except Exception as e:
+        logger.error(f"[{datetime.now()}][fetch_previous_data] error due to :{e}.")
+        fetch_previous_data("15m")
+        time.sleep(30)
 
-fetch_previous_data()
+# fetch_previous_data("15m")

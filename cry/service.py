@@ -42,8 +42,8 @@ def detect_doji(df, threshold=0.1):
 
 
 
-# Status: Not tested properly.
-def check_trending(df,candles = 10):
+# Status: Working properly.
+def check_trending(symbol,df,candles = 10):
     """
     Calculate the number of pips covered and direction from a BTC DataFrame.
 
@@ -55,23 +55,37 @@ def check_trending(df,candles = 10):
     """
     # Ensure the DataFrame is sorted by timestamp (just in case)
     df = df.sort_values('timestamp')
-    df = df.tail(candles)
-    state = None
-
-    # Get first open and last close
-    first_open = df.iloc[0]['open']
-    last_close = df.iloc[-1]['close']
+    state = None    
+    # import ipdb;ipdb.set_trace()
+    # print(df)
 
     # Calculate pips
-    pips_covered = (last_close - first_open)  # 1 pip = 0.01
-    if abs(pips_covered) >300:
-        state = "Trending"
-    elif abs(pips_covered) in [100,200]:
-        state = "Trapped."
+    if symbol == "BTC/USDT":
+        df = df.tail(candles)
+        # Get first open and last close
+        first_open = float(df.iloc[0]['open'])
+        last_close = float(df.iloc[-1]['close'])
+        pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
+        if pips_covered >300:
+            state = "Trending"
+        elif pips_covered in range(100,200):
+            state = "Consolidating."
     
+    else:
+        df = df.tail(5)
+        # Get first open and last close
+        first_open = float(df.iloc[0]['open'])
+        last_close = float(df.iloc[-1]['close'])
+        pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
+        if pips_covered >15:
+            state = "Trending"
+        elif pips_covered in range(5,10):
+            state = "Consolidating."
+
+
     # Determine direction
     direction = "Buy" if pips_covered > 0 else "Sell"
 
-    return pips_covered, direction, state
+    return {"pips_covered":pips_covered, "direction":direction, "state":state}
 
 
