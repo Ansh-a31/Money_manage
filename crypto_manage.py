@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from logger import logger
 from send_email import send_email_report
-
+from mongo.mongo_client import mongo_client
 # Status: Not working properly.
 def continuous_live_data(interval=5):
     """
@@ -121,7 +121,14 @@ def fetch_previous_data(time_frame):
             trending_direction = is_trending.get("direction")
             email_msg = f"{symbol} currently trending in {trending_direction} on TF: {time_frame}, at: [{created_time}]."
             logger.info(f"Email Send: {email_msg}")
-            send_email_report(email_msg)
+            # send_email_report(email_msg)
+            msg = {
+                "symbol":symbol,
+                "trending_direction":trending_direction,
+                "time_frame": time_frame,
+                "email_message":email_msg
+            }
+            mongo_client(msg)
         # print(df)
         
         elif time_frame == "15m" and is_trending.get("state") != "Trending":
@@ -132,4 +139,4 @@ def fetch_previous_data(time_frame):
         fetch_previous_data("15m")
         time.sleep(30)
 
-# fetch_previous_data("15m")
+fetch_previous_data("15m")
