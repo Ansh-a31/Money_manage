@@ -1,6 +1,6 @@
 import pandas as pd
-
-
+from logger import logger
+from datetime import datetime
 
 # Status: Working fine.
 def adjust_open_close(df):
@@ -54,10 +54,10 @@ def check_trending(symbol,df,candles = 10):
         tuple: (pips_covered: float, direction: str)
     """
     # Ensure the DataFrame is sorted by timestamp (just in case)
+    logger.info(f"[{datetime.now()}]: Check trending for symbol: {symbol} on Candle:{candles} ")
     df = df.sort_values('timestamp')
     state = None    
-    # import ipdb;ipdb.set_trace()
-    # print(df)
+
 
     # Calculate pips
     if symbol == "BTC/USDT":
