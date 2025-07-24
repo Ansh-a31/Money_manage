@@ -69,7 +69,7 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
         # Convert to DataFrame row for clarity
         df = pd.DataFrame([prev_candle], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True).dt.tz_convert('Asia/Kolkata')
-        
+        df = adjust_open_close(df)
         df = detect_doji(df)
         if df["is_doji"].items() == True:
             created_time = df["timestamp"][0]
@@ -89,6 +89,10 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
 
 
 def fetch_previous_data(time_frame):
+    '''
+    Function frst check check trending and for 15 min, if found not trending then check trending for 1h.
+        
+    '''
     try:
         logger.info(f"[{datetime.now()}] [fetch_previous_data]")
         exchange = ccxt.binance()
@@ -96,7 +100,6 @@ def fetch_previous_data(time_frame):
         exchange.load_markets()
 
         symbol = 'ETH/USDT'
-        # import ipdb;ipdb.set_trace()
         # Fetch the current ticker (includes last price, bid, ask, etc.)
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=30)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -110,7 +113,6 @@ def fetch_previous_data(time_frame):
         print(f"Symbol: {symbol}")
         print(f"timeframe:{time_frame}")
         # print(detect_doji(df))
-        # import ipdb;ipdb.set_trace()
         is_trending =check_trending(symbol,df)
         print(is_trending)
 
@@ -122,9 +124,9 @@ def fetch_previous_data(time_frame):
             send_email_report(email_msg)
         # print(df)
         
-        elif time_frame == "1h":
-            return {"msg":f"Not trending at {time_frame}."}
-        fetch_previous_data("1h")
+        elif time_frame == "15m" and is_trending.get("state") != "Trending":
+            fetch_previous_data("1h")
+            logger.info(f"Not trending at {time_frame}.")
     except Exception as e:
         logger.error(f"[{datetime.now()}][fetch_previous_data] error due to :{e}.")
         fetch_previous_data("15m")
