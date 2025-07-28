@@ -45,7 +45,7 @@ def detect_doji(df, threshold=0.1):
 # Status: Working properly.
 def check_trending(symbol,df,candles = 10):
     """
-    Calculate the number of pips covered and direction from a BTC DataFrame.
+    Calculate the number of pips covered and direction from a DataFrame.
 
     Parameters:
         df (pd.DataFrame): DataFrame containing at least 'open' and 'close' columns.
