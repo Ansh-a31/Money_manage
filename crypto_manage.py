@@ -5,7 +5,8 @@ import pandas as pd
 from datetime import datetime
 from logger import logger
 from send_email import send_email_report
-from mongo.mongo_client import mongo_client
+from mongo.mongo_client import push_mongo,fetch_last
+
 # Status: Not working properly.
 def continuous_live_data(interval=5):
     """
@@ -83,14 +84,13 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
         get_previous_closed_candle()
         time.sleep(30)
 
-
 # get_previous_closed_candle()
 
 
 
 def fetch_previous_data(time_frame):
     '''
-    Function frst check check trending and for 15 min, if found not trending then check trending for 1h.
+    Function first check check trending and for 15 min, if found not trending then check trending for 1h.
         
     '''
     try:
@@ -128,7 +128,7 @@ def fetch_previous_data(time_frame):
                 "time_frame": time_frame,
                 "email_message":email_msg
             }
-            mongo_client(msg)
+            push_mongo(msg)
         # print(df)
         
         elif time_frame == "15m" and is_trending.get("state") != "Trending":
