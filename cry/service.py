@@ -89,3 +89,49 @@ def check_trending(symbol,df,candles = 10):
     return {"pips_covered":pips_covered, "direction":direction, "state":state}
 
 
+
+# Status: 
+def identify_supply_demand_zones(df, lookback=3, threshold=0.003):
+    """
+    Identifies supply and demand zones based on recent price structure.
+
+    Parameters:
+    - df: DataFrame with OHLCV data and timestamp
+    - lookback: Number of candles to look back/forward for reversals
+    - threshold: Minimum price change (%) to consider a zone
+
+    Returns:
+    - A tuple of (demand_zones, supply_zones) lists
+    """
+    demand_zones = []
+    supply_zones = []
+
+    for i in range(lookback, len(df) - lookback):
+        current_low = df.loc[i, 'low']
+        current_high = df.loc[i, 'high']
+
+        # Get previous and next lows/highs for comparison
+        prev_lows = df.loc[i - lookback:i - 1, 'low']
+        next_lows = df.loc[i + 1:i + lookback, 'low']
+        prev_highs = df.loc[i - lookback:i - 1, 'high']
+        next_highs = df.loc[i + 1:i + lookback, 'high']
+
+        # Demand Zone: Swing Low + sharp move up
+        if current_low < prev_lows.min() and current_low < next_lows.min():
+            price_change = (df.loc[i + 1, 'close'] - current_low) / current_low
+            if price_change >= threshold:
+                demand_zones.append({
+                    'timestamp': df.loc[i, 'timestamp'],
+                    'price': round(current_low, 2)
+                })
+
+        # Supply Zone: Swing High + sharp move down
+        if current_high > prev_highs.max() and current_high > next_highs.max():
+            price_change = (current_high - df.loc[i + 1, 'close']) / current_high
+            if price_change >= threshold:
+                supply_zones.append({
+                    'timestamp': df.loc[i, 'timestamp'],
+                    'price': round(current_high, 2)
+                })
+
+    return demand_zones, supply_zones

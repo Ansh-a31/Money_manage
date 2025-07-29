@@ -50,7 +50,7 @@ def continuous_live_data(interval=5):
 
 
 
-def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
+def get_previous_closed_candle_status(symbol='BTC/USDT', timeframe='15m'):
     """
     Fetches the just-closed (previous) candle for the given symbol and timeframe.
 
@@ -81,10 +81,10 @@ def get_previous_closed_candle(symbol='BTC/USDT', timeframe='15m'):
 
     except Exception as e:
         logger.error(f"[{datetime.now()}][get_previous_closed_candle] error due to :{e}.")
-        get_previous_closed_candle()
+        get_previous_closed_candle_status()
         time.sleep(30)
 
-# get_previous_closed_candle()
+# get_previous_closed_candle_status()
 
 
 
@@ -133,7 +133,6 @@ def fetch_previous_data(time_frame):
         
         elif time_frame == "15m" and is_trending.get("state") != "Trending":
             fetch_previous_data("1h")
-            logger.info(f"Not trending at {time_frame}.")
     except Exception as e:
         logger.error(f"[{datetime.now()}][fetch_previous_data] error due to :{e}.")
         fetch_previous_data("15m")
