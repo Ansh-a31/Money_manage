@@ -1,0 +1,16 @@
+# # Python cache files
+# __pycache__/
+# *.py[cod]
+# *.pyo
+# .pyc
+
+# # Virtual environment
+# venv/
+# .env/
+# .venv/
+# launch.json
+
+# # Environment files or sensitive credentials
+# .env
+# config.yaml
+# secrets.json

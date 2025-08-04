@@ -54,43 +54,46 @@ def check_trending(symbol,df,candles = 10):
         tuple: (pips_covered: float, direction: str)
     """
     # Ensure the DataFrame is sorted by timestamp (just in case)
-    logger.info(f"[{datetime.now()}]: Check trending for symbol: {symbol} on Candle:{candles} ")
-    df = df.sort_values('timestamp')
-    state = None    
+    try:
+            logger.info(f"[{datetime.now()}]: Check trending for symbol: {symbol} on Candle:{candles} ")
+            df = df.sort_values('timestamp')
+            state = None    
 
 
-    # Calculate pips
-    if symbol == "BTC/USDT":
-        df = df.tail(candles)
-        # Get first open and last close
-        first_open = float(df.iloc[0]['open'])
-        last_close = float(df.iloc[-1]['close'])
-        pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
-        if pips_covered >300:
-            state = "Trending"
-        elif pips_covered in range(100,200):
-            state = "Consolidating."
-    
-    else:
-        df = df.tail(5)
-        # Get first open and last close
-        first_open = float(df.iloc[0]['open'])
-        last_close = float(df.iloc[-1]['close'])
-        pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
-        if pips_covered >15:
-            state = "Trending"
-        elif pips_covered in range(5,10):
-            state = "Consolidating."
+            # Calculate pips
+            if symbol == "BTC/USDT":
+                df = df.tail(candles)
+                # Get first open and last close
+                first_open = float(df.iloc[0]['open'])
+                last_close = float(df.iloc[-1]['close'])
+                pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
+                if pips_covered >300:
+                    state = "Trending"
+                elif pips_covered in range(100,200):
+                    state = "Consolidating."
+            
+            else:
+                df = df.tail(5)
+                # Get first open and last close
+                first_open = float(df.iloc[0]['open'])
+                last_close = float(df.iloc[-1]['close'])
+                pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
+                if pips_covered >15:
+                    state = "Trending"
+                elif pips_covered in range(5,10):
+                    state = "Consolidating."
 
 
-    # Determine direction
-    direction = "Buy" if pips_covered > 0 else "Sell"
+            # Determine direction
+            direction = "Buy" if pips_covered > 0 else "Sell"
 
-    return {"pips_covered":pips_covered, "direction":direction, "state":state}
+            return {"pips_covered":pips_covered, "direction":direction, "state":state}
+    except Exception as e:
+        logger.error(f"[{datetime.now()}][check_trending] error due to :{e}.")
+        return {"pips_covered":0, "direction":"Unknown", "state":"Error"}
 
 
-
-# Status: 
+# Status: Not working porperly.
 def identify_supply_demand_zones(df, lookback=3, threshold=0.003):
     """
     Identifies supply and demand zones based on recent price structure.
@@ -135,3 +138,32 @@ def identify_supply_demand_zones(df, lookback=3, threshold=0.003):
                 })
 
     return demand_zones, supply_zones
+
+
+# Status: Working properly.
+def analyze_daily_movement(df):
+    # import ipdb;ipdb.set_trace()
+    logger.info(f"[{datetime.now()}]: [analyze_daily_movement] Starting analysis.")
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Create date and day columns
+    df['Date'] = df['timestamp'].dt.date
+    df['Day'] = df['timestamp'].dt.day_name()
+
+    # Group by each date
+    daily_summary = df.groupby('Date').agg(
+        first_open=('open', 'first'),
+        last_close=('close', 'last'),
+        Day=('Day', 'first')
+    ).reset_index()
+
+    # Calculate movement and direction
+    daily_summary['Pips_Moved'] = (daily_summary['last_close'] - daily_summary['first_open']) * 100  # convert to pips
+    daily_summary['Price_Movement'] = daily_summary['Pips_Moved'].apply(lambda x: '+ve' if x >= 0 else '-ve')
+
+    # Reorder and rename columns
+    final_df = daily_summary[['Date', 'Day', 'Price_Movement', 'Pips_Moved']]
+    final_df.to_csv("data_analyze.csv", index=False)
+    logger.info(f"[{datetime.now()}]: [analyze_daily_movement] Data analysis finished, CSV created.")
+    return final_df
+
