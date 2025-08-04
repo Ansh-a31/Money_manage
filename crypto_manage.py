@@ -48,35 +48,7 @@ def continuous_live_data(interval=5):
 
 # continuous_live_data()
 
-
-def data_loader(symbol,time_frame,week_day_analysis=False):
-    try:
-        logger.info(f"[{datetime.now()}] [data_loader]. Loading basic data.")
-        print(f"Symbol: {symbol}")
-        print(f"timeframe:{time_frame}")
-        exchange = ccxt.binance()
-        # Load markets (needed to initialize market symbols properly)
-        exchange.load_markets()
-        # Fetch the current ticker (includes last price, bid, ask, etc.)
-        
-        candles = days_since_start_of_year()
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=30)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
-        df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
-        df = adjust_open_close(df)
-
-        if week_day_analysis:
-            analyze_daily_movement(df)
-        return df
-    except Exception as e:
-        logger.error(f"[{datetime.now()}]: [data_loader] error due to :{e}.")
-        data_loader(time_frame,week_day_analysis)
-        time.sleep(30)
-
-
-
+# Status: Working properly.
 def get_previous_closed_candle_status(symbol='BTC/USDT', timeframe='15m'):
     """
     Fetches the just-closed (previous) candle for the given symbol and timeframe.
@@ -114,7 +86,39 @@ def get_previous_closed_candle_status(symbol='BTC/USDT', timeframe='15m'):
 # get_previous_closed_candle_status()
 
 
+# Status: Working properly.
+def data_loader(symbol,time_frame,week_day_analysis=False):
+    '''
+    Loads historical OHLCV data for the given symbol and timeframe.
+    Returns a DataFrame with timestamp, open, high, low, close, volume.
+    If week_day_analysis is True, it will also analyze week days  movements.
+    '''
+    try:
+        logger.info(f"[{datetime.now()}] [data_loader]. Loading basic data.")
+        print(f"Symbol: {symbol}")
+        print(f"timeframe:{time_frame}")
+        exchange = ccxt.binance()
+        # Load markets (needed to initialize market symbols properly)
+        exchange.load_markets()
 
+        candles = days_since_start_of_year()
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=candles)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
+        df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
+        df = adjust_open_close(df)
+
+        if week_day_analysis:
+            analyze_daily_movement(df)
+        return df
+    except Exception as e:
+        logger.error(f"[{datetime.now()}]: [data_loader] error due to :{e}.")
+        data_loader(time_frame,week_day_analysis)
+        time.sleep(30)
+
+
+# Status: Working properly.
 def adaptive_trend_check(time_frame):
     '''
     Function first check check trending and for 15 min, if found not trending then check trending for 1h.
@@ -123,7 +127,7 @@ def adaptive_trend_check(time_frame):
         logger.info(f"[{datetime.now()}] [adaptive_trend_check]")
         symbol = 'ETH/USDT'
         
-        df = data_loader(symbol, time_frame, week_day_analysis=True)
+        df = data_loader(symbol, time_frame)
 
         is_trending =check_trending(symbol,df)
         print(is_trending)
@@ -134,13 +138,13 @@ def adaptive_trend_check(time_frame):
             email_msg = f"{symbol} currently trending in {trending_direction} on TF: {time_frame}, at: [{created_time}]."
             logger.info(f"Email Send: {email_msg}")
             # send_email_report(email_msg)
-            msg = {
+            db_data = {
                 "symbol":symbol,
                 "trending_direction":trending_direction,
                 "time_frame": time_frame,
                 "email_message":email_msg
             }
-            push_mongo(msg)
+            push_mongo(db_data)
         # print(df)
         
         elif time_frame == "15m" and is_trending.get("state") != "Trending":

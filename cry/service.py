@@ -2,6 +2,8 @@ import pandas as pd
 from logger import logger
 from datetime import datetime
 
+from mongo.mongo_client import push_many
+
 # Status: Working fine.
 def adjust_open_close(df):
     """
@@ -142,7 +144,9 @@ def identify_supply_demand_zones(df, lookback=3, threshold=0.003):
 
 # Status: Working properly.
 def analyze_daily_movement(df):
-    # import ipdb;ipdb.set_trace()
+    '''
+    It analyze week days movements and saves the results to MongoDB and CSV.
+    '''
     logger.info(f"[{datetime.now()}]: [analyze_daily_movement] Starting analysis.")
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
@@ -160,10 +164,33 @@ def analyze_daily_movement(df):
     # Calculate movement and direction
     daily_summary['Pips_Moved'] = (daily_summary['last_close'] - daily_summary['first_open']) * 100  # convert to pips
     daily_summary['Price_Movement'] = daily_summary['Pips_Moved'].apply(lambda x: '+ve' if x >= 0 else '-ve')
-
     # Reorder and rename columns
     final_df = daily_summary[['Date', 'Day', 'Price_Movement', 'Pips_Moved']]
+    push_dataframe_to_mongo(final_df)
     final_df.to_csv("data_analyze.csv", index=False)
     logger.info(f"[{datetime.now()}]: [analyze_daily_movement] Data analysis finished, CSV created.")
     return final_df
 
+
+# Status: Working properly.
+def push_dataframe_to_mongo(df):
+    '''
+    Pushes a DataFrame to MongoDB collection 'week_data'.
+    '''
+    try:
+        logger.info(f"[{datetime.now()}]: [push_dataframe_to_mongo] Pushing data to mongo.")
+        df = df.copy()
+
+        # Convert 'Date' column to datetime
+        df['Date'] = pd.to_datetime(df['Date'])
+        # Convert DataFrame to list of dictionaries
+        records = df.to_dict(orient='records')
+
+        # Insert records if available
+        if records:
+            result = push_many(records,"week_data")
+            logger.info(f"[{datetime.now()}]: [push_dataframe_to_mongo] Inserted {len(result.inserted_ids)} documents into MongoDB collection: week_data")
+        else:
+            logger.warning(f"[{datetime.now()}]: [push_dataframe_to_mongo] No records to insert into MongoDB.")
+    except Exception as e:
+        logger.error(f"[{datetime.now()}]: [push_dataframe_to_mongo]  Error inserting into MongoDB: {e}")
