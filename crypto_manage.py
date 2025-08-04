@@ -1,4 +1,4 @@
-from cry.service import check_trending, detect_doji, adjust_open_close
+from cry.service import check_trending, detect_doji, adjust_open_close, analyze_daily_movement
 import time
 import ccxt
 import pandas as pd
@@ -6,6 +6,7 @@ from datetime import datetime
 from logger import logger
 from send_email import send_email_report
 from mongo.mongo_client import push_mongo,fetch_last
+from utils import data, days_since_start_of_year
 
 # Status: Not working properly.
 def continuous_live_data(interval=5):
@@ -48,6 +49,32 @@ def continuous_live_data(interval=5):
 # continuous_live_data()
 
 
+def data_loader(symbol,time_frame,week_day_analysis=False):
+    try:
+        logger.info(f"[{datetime.now()}] [data_loader]. Loading basic data.")
+        print(f"Symbol: {symbol}")
+        print(f"timeframe:{time_frame}")
+        exchange = ccxt.binance()
+        # Load markets (needed to initialize market symbols properly)
+        exchange.load_markets()
+        # Fetch the current ticker (includes last price, bid, ask, etc.)
+        
+        candles = days_since_start_of_year()
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=30)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
+        df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
+        df = adjust_open_close(df)
+
+        if week_day_analysis:
+            analyze_daily_movement(df)
+        return df
+    except Exception as e:
+        logger.error(f"[{datetime.now()}]: [data_loader] error due to :{e}.")
+        data_loader(time_frame,week_day_analysis)
+        time.sleep(30)
+
 
 
 def get_previous_closed_candle_status(symbol='BTC/USDT', timeframe='15m'):
@@ -88,31 +115,16 @@ def get_previous_closed_candle_status(symbol='BTC/USDT', timeframe='15m'):
 
 
 
-def fetch_previous_data(time_frame):
+def adaptive_trend_check(time_frame):
     '''
     Function first check check trending and for 15 min, if found not trending then check trending for 1h.
-        
     '''
     try:
-        logger.info(f"[{datetime.now()}] [fetch_previous_data]")
-        exchange = ccxt.binance()
-        # Load markets (needed to initialize market symbols properly)
-        exchange.load_markets()
-
+        logger.info(f"[{datetime.now()}] [adaptive_trend_check]")
         symbol = 'ETH/USDT'
-        # Fetch the current ticker (includes last price, bid, ask, etc.)
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=30)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        
+        df = data_loader(symbol, time_frame, week_day_analysis=True)
 
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
-        df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
-        df = adjust_open_close(df)
-        # df.to_csv('btc_ohlcv_1m.csv', index=False)
-
-        # Print relevant data
-        print(f"Symbol: {symbol}")
-        print(f"timeframe:{time_frame}")
-        # print(detect_doji(df))
         is_trending =check_trending(symbol,df)
         print(is_trending)
 
@@ -132,10 +144,13 @@ def fetch_previous_data(time_frame):
         # print(df)
         
         elif time_frame == "15m" and is_trending.get("state") != "Trending":
-            fetch_previous_data("1h")
+            adaptive_trend_check("1h")
+        
+
     except Exception as e:
-        logger.error(f"[{datetime.now()}][fetch_previous_data] error due to :{e}.")
-        fetch_previous_data("15m")
+        logger.error(f"[{datetime.now()}][adaptive_trend_check] error due to :{e}.")
+        adaptive_trend_check("15m")
         time.sleep(30)
 
-fetch_previous_data("15m")
+adaptive_trend_check("1d")
+
