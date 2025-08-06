@@ -5,8 +5,8 @@ import pandas as pd
 from datetime import datetime
 from logger import logger
 from send_email import send_email_report
-from mongo.mongo_client import push_mongo,fetch_last
-from utils import data, days_since_start_of_year
+from mongo.mongo_client import push_mongo,delete_data_mongo
+from utils import days_since_start_of_year
 
 # Status: Not working properly.
 def continuous_live_data(interval=5):
@@ -110,6 +110,7 @@ def data_loader(symbol,time_frame,week_day_analysis=False):
         df = adjust_open_close(df)
 
         if week_day_analysis:
+            delete_data_mongo()
             analyze_daily_movement(df)
         return df
     except Exception as e:
@@ -127,7 +128,7 @@ def adaptive_trend_check(time_frame):
         logger.info(f"[{datetime.now()}] [adaptive_trend_check]")
         symbol = 'ETH/USDT'
         
-        df = data_loader(symbol, time_frame)
+        df = data_loader(symbol, time_frame,week_day_analysis=True)
 
         is_trending =check_trending(symbol,df)
         print(is_trending)

@@ -189,7 +189,7 @@ def push_dataframe_to_mongo(df):
         # Insert records if available
         if records:
             result = push_many(records,"week_data")
-            logger.info(f"[{datetime.now()}]: [push_dataframe_to_mongo] Inserted {len(result.inserted_ids)} documents into MongoDB collection: week_data")
+            logger.info(f"[{datetime.now()}]: [push_dataframe_to_mongo] Inserted documents into MongoDB collection: week_data")
         else:
             logger.warning(f"[{datetime.now()}]: [push_dataframe_to_mongo] No records to insert into MongoDB.")
     except Exception as e:
