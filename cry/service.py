@@ -1,7 +1,7 @@
 import pandas as pd
 from logger import logger
 from datetime import datetime
-
+import numpy as np
 from mongo.mongo_client import push_many
 
 # Status: Working fine.
@@ -165,7 +165,8 @@ def analyze_daily_movement(df):
     daily_summary['Pips_Moved'] = (daily_summary['last_close'] - daily_summary['first_open']) * 100  # convert to pips
     daily_summary['Price_Movement'] = daily_summary['Pips_Moved'].apply(lambda x: '+ve' if x >= 0 else '-ve')
     # Reorder and rename columns
-    final_df = daily_summary[['Date', 'Day', 'Price_Movement', 'Pips_Moved']]
+    daily_summary['garman_klass_vol'] = ((np.log(df['high'])-np.log(df['low']))**2)/2-(2*np.log(2)-1)*((np.log(df['close'])-np.log(df['open']))**2)
+    final_df = daily_summary[['Date', 'Day', 'Price_Movement', 'Pips_Moved',"garman_klass_vol"]]
     push_dataframe_to_mongo(final_df)
     final_df.to_csv("data_analyze.csv", index=False)
     logger.info(f"[{datetime.now()}]: [analyze_daily_movement] Data analysis finished, CSV created.")
