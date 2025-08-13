@@ -14,3 +14,6 @@ launch.json
 .env
 config.yaml
 secrets.json
+
+# Other files
+data_analyze.csv
