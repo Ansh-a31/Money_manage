@@ -33,7 +33,7 @@ def send_mail_with_attachment(body,email_subject):
 
     sender_email = "kanshuman571@gmail.com"
     sender_password = "aqqg xbbq ocxy vryo"
-    recipient_email = "anshuman.kumar1@renewbuy.com"
+    recipient_email = "anshumanpep1111@gmail.com"
     subject = email_subject
     # body = "with attachment"
 
