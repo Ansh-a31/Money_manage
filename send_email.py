@@ -1,6 +1,6 @@
 EMAIL_ADDRESS = "kanshuman571@gmail.com"
 EMAIL_PASSWORD = "aqqg xbbq ocxy vryo"
-RECIPIENT = "anshuman.kumar1@renewbuy.com"
+RECIPIENT = "anshumanpep1111@gmail.com"
 
 import smtplib
 from email import encoders
