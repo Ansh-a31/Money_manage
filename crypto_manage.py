@@ -1,4 +1,4 @@
-from cry.service import check_trending, detect_doji, adjust_open_close, analyze_daily_movement
+from cry.service import check_trending, detect_doji, adjust_open_close, analyze_daily_movement, processing_hourly_movement
 import time
 import ccxt
 import pandas as pd
@@ -100,16 +100,18 @@ def data_loader(symbol,time_frame,week_day_analysis=False):
         exchange = ccxt.binance()
         # Load markets (needed to initialize market symbols properly)
         exchange.load_markets()
-
-        candles = days_since_start_of_year()
+        
+        candles = days_since_start_of_year() if time_frame == "1d" else None
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=candles)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms',utc = True)
         df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
         df = adjust_open_close(df)
-
-        if week_day_analysis:
+        if week_day_analysis and time_frame == "1h":
+            delete_data_mongo("","hourly_data")
+            processing_hourly_movement(df)
+        elif week_day_analysis and time_frame == "1d":
             delete_data_mongo()
             analyze_daily_movement(df)
         return df
@@ -158,4 +160,5 @@ def adaptive_trend_check(time_frame):
         time.sleep(30)
 
 adaptive_trend_check("1d")
+
 

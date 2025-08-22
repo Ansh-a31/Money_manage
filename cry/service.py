@@ -151,7 +151,7 @@ def analyze_daily_movement(df):
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     # Create date and day columns
-    df['Date'] = df['timestamp'].dt.date
+    df['Date'] = pd.to_datetime(df['timestamp'].dt.date)
     df['Day'] = df['timestamp'].dt.day_name()
 
     # Group by each date
@@ -167,14 +167,53 @@ def analyze_daily_movement(df):
     # Reorder and rename columns
     daily_summary['garman_klass_vol'] = ((np.log(df['high'])-np.log(df['low']))**2)/2-(2*np.log(2)-1)*((np.log(df['close'])-np.log(df['open']))**2)
     final_df = daily_summary[['Date', 'Day', 'Price_Movement', 'Pips_Moved',"garman_klass_vol"]]
-    push_dataframe_to_mongo(final_df)
+    push_dataframe_to_mongo(final_df,"week_data")
     final_df.to_csv("data_analyze.csv", index=False)
     logger.info(f"[{datetime.now()}]: [analyze_daily_movement] Data analysis finished, CSV created.")
     return final_df
 
 
+
+def processing_hourly_movement(df):
+    '''
+    It analyze week days movements and saves the results to MongoDB and CSV.
+    '''
+    logger.info(f"[{datetime.now()}]: [processing_hourly_movement] Starting analysis.")
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+    # Create date and day columns
+    df['Hour'] = df['timestamp'].dt.floor('H')
+    df['Day'] = df['timestamp'].dt.day_name()
+
+    # Group by each date
+    hourly_summary = df.groupby('Hour').agg(
+        first_open=('open', 'first'),
+        last_close=('close', 'last'),
+        high_max=('high', 'max'),
+        low_min=('low', 'min'),
+        Day=('Day', 'first')
+    ).reset_index()
+
+    # Calculate movement and direction
+    hourly_summary['Pips_Moved'] = (hourly_summary['last_close'] - hourly_summary['first_open']) * 100  # convert to pips
+    hourly_summary['Price_Movement'] = hourly_summary['Pips_Moved'].apply(lambda x: '+ve' if x >= 0 else '-ve')
+    # Reorder and rename columns
+    hourly_summary['garman_klass_vol'] = np.sqrt(
+    0.5 * (np.log(hourly_summary['high_max'] / hourly_summary['low_min']) ** 2)
+    - (2 * np.log(2) - 1) * (np.log(hourly_summary['last_close'] / hourly_summary['first_open']) ** 2)
+    )
+
+    final_df = hourly_summary[['Hour', 'Day', 'Price_Movement', 'Pips_Moved', 'garman_klass_vol']]
+    push_dataframe_to_mongo(final_df,"hourly_data")
+    final_df.to_csv("1h_analyze.csv", index=False)
+    logger.info(f"[{datetime.now()}]: [processing_hourly_movement] Data analysis finished, CSV created.")
+    return final_df
+
+
+
+
 # Status: Working properly.
-def push_dataframe_to_mongo(df):
+def push_dataframe_to_mongo(df,collection_name):
     '''
     Pushes a DataFrame to MongoDB collection 'week_data'.
     '''
@@ -182,14 +221,12 @@ def push_dataframe_to_mongo(df):
         logger.info(f"[{datetime.now()}]: [push_dataframe_to_mongo] Pushing data to mongo.")
         df = df.copy()
 
-        # Convert 'Date' column to datetime
-        df['Date'] = pd.to_datetime(df['Date'])
         # Convert DataFrame to list of dictionaries
         records = df.to_dict(orient='records')
 
         # Insert records if available
         if records:
-            result = push_many(records,"week_data")
+            result = push_many(records, collection_name)
             logger.info(f"[{datetime.now()}]: [push_dataframe_to_mongo] Inserted documents into MongoDB collection: week_data")
         else:
             logger.warning(f"[{datetime.now()}]: [push_dataframe_to_mongo] No records to insert into MongoDB.")
