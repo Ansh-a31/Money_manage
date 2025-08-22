@@ -101,7 +101,7 @@ def data_loader(symbol,time_frame,week_day_analysis=False):
         # Load markets (needed to initialize market symbols properly)
         exchange.load_markets()
         
-        candles = days_since_start_of_year() if time_frame == "1d" else None
+        candles = days_since_start_of_year() if time_frame == "1d" else 1000
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=candles)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
@@ -159,6 +159,6 @@ def adaptive_trend_check(time_frame):
         adaptive_trend_check("15m")
         time.sleep(30)
 
-adaptive_trend_check("1d")
+adaptive_trend_check("1h")
 
 
