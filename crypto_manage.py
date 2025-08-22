@@ -101,7 +101,7 @@ def data_loader(symbol,time_frame,week_day_analysis=False):
         # Load markets (needed to initialize market symbols properly)
         exchange.load_markets()
         
-        candles = days_since_start_of_year() if time_frame == "1d" else 1000
+        candles = days_since_start_of_year() if time_frame == "1d" else 300   # for i hr analyze only for last two weeks data
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe= time_frame, limit=candles)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 

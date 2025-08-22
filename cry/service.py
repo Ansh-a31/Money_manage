@@ -180,9 +180,11 @@ def processing_hourly_movement(df):
     '''
     logger.info(f"[{datetime.now()}]: [processing_hourly_movement] Starting analysis.")
     df['timestamp'] = pd.to_datetime(df['timestamp'])
-
+    import ipdb;ipdb.set_trace()
     # Create date and day columns
-    df['Hour'] = df['timestamp'].dt.floor('H')
+    df['Hour'] = df['timestamp'].dt.floor('h')
+    df['Hour'] = df['Hour'].dt.strftime('%Y-%m-%dT%H:%M:%S%z')
+
     df['Day'] = df['timestamp'].dt.day_name()
 
     # Group by each date
@@ -205,7 +207,7 @@ def processing_hourly_movement(df):
 
     final_df = hourly_summary[['Hour', 'Day', 'Price_Movement', 'Pips_Moved', 'garman_klass_vol']]
     push_dataframe_to_mongo(final_df,"hourly_data")
-    final_df.to_csv("1h_analyze.csv", index=False)
+    final_df.to_csv("1h_analyze.csv", index=False, date_format='%Y-%m-%dT%H:%M:%SZ')
     logger.info(f"[{datetime.now()}]: [processing_hourly_movement] Data analysis finished, CSV created.")
     return final_df
 
