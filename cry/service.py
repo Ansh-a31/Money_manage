@@ -180,7 +180,7 @@ def processing_hourly_movement(df):
     '''
     logger.info(f"[{datetime.now()}]: [processing_hourly_movement] Starting analysis.")
     df['timestamp'] = pd.to_datetime(df['timestamp'])
-    import ipdb;ipdb.set_trace()
+
     # Create date and day columns
     df['Hour'] = df['timestamp'].dt.floor('h')
     df['Hour'] = df['Hour'].dt.strftime('%Y-%m-%dT%H:%M:%S%z')
