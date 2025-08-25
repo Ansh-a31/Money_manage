@@ -69,14 +69,43 @@ def ohlcv(symbol, num_bars=250):
     true_range = np.max(ranges, axis=1)
     data_ohlc['atr'] = true_range.rolling(window=14).sum() / 14
     
-    data_ohlc["p_LC"] = np.abs(data_ohlc['low']- data_ohlc['close'])
-    data_ohlc["p_HC"] = np.abs(data_ohlc['high']- data_ohlc['close'])
+    # data_ohlc["p_LC"] = np.abs(data_ohlc['low']- data_ohlc['close'])
+    # data_ohlc["p_HC"] = np.abs(data_ohlc['high']- data_ohlc['close'])
     
-    data_ohlc = data_ohlc.drop(columns=['open', 'high', 'low', 'close'])
+    # data_ohlc = data_ohlc.drop(columns=['open', 'high', 'low', 'close'])
     
     return data_ohlc
+
+# ep 5
+def hiddern_divergence(data,n=14):
+    data["H_Bear"] = data.iloc[argrelextrema(data.RSI.values, np.greater_equal, order=n)[0]]['RSI']
+    data["H_Bull"] = data.iloc[argrelextrema(data.RSI.values, np.less_equal, order=n)[0]]['RSI']
+    
+    df_slope_bear = data[data["H_Bear"].notnull()].copy() 
+    df_slope_bear["Bear_step"] = df_slope_bear.index
+    df_slope_bear["H_Bear_Slope"] = df_slope_bear["H_Bear"].diff() / df_slope_bear["Bear_step"].diff()
+    data = pd.concat([data, df_slope_bear["H_Bear_Slope"]], axis=1).reindex(data.index)
+    
+    df_slope_bull = data[data["H_Bull"].notnull()].copy() 
+    df_slope_bull["Bull_step"] = df_slope_bull.index
+    df_slope_bull["H_Bull_Slope"] = df_slope_bull["H_Bull"].diff() / df_slope_bull["Bull_step"].diff()
+    data = pd.concat([data, df_slope_bull["H_Bull_Slope"]], axis=1).reindex(data.index)
+
+    return data
+
+
+def Strategy(data):
+    data["RSI"] = ta.rsi(data["close"], timeperiod=14).fillna(0)
+    data = hiddern_divergence(data)
+    return data
+
+
+
+
+
 
 
 initialize_mt5()
 data = ohlcv('BTCUSD', 250)   
-print(data[-30:])
+data = Strategy(data)
+print(data[30:80])
