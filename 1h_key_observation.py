@@ -14,7 +14,6 @@
 
 
 
-
 --------------------------------------------------------------------------------------------------------------
 '''
 
@@ -28,7 +27,7 @@
 Self analysed Key observations :
 
 Low Volatility: < 0.005              Expect small, range-bound moves. Good for scalping
-High Volatility: > 0.01              Expect larger price swings. Good for breakout strategies 
+High Volatility: > 0.01              Expect larger price swings (>2000 pips) . Good for breakout strategies 
 Very High Volatility: > 0.015        High risk/reward
 
 
@@ -36,8 +35,9 @@ Simple Rule-Based Approach:
 Enter trades when volatility is rising from low to medium (e.g., vol jumps from 0.004 to 0.008).
 Exit or reduce size when volatility is very high (>0.015), as unpredictability increases
 
-
-
+Low < 180 pips
+Medium :180 - 4600 pips
+High > 4600 pips
 
 
 

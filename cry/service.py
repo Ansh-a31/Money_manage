@@ -80,7 +80,7 @@ def check_trending(symbol,df,candles = 10):
                 first_open = float(df.iloc[0]['open'])
                 last_close = float(df.iloc[-1]['close'])
                 pips_covered = abs(last_close - first_open)  # 1 pip = 0.01
-                if pips_covered >15:
+                if pips_covered >20:
                     state = "Trending"
                 elif pips_covered in range(5,10):
                     state = "Consolidating."
@@ -205,7 +205,7 @@ def processing_hourly_movement(df):
     - (2 * np.log(2) - 1) * (np.log(hourly_summary['last_close'] / hourly_summary['first_open']) ** 2)
     )
 
-    final_df = hourly_summary[['Hour', 'Day', 'Price_Movement', 'Pips_Moved', 'garman_klass_vol']]
+    final_df = hourly_summary[['Hour', 'Day', 'Price_Movement','first_open','last_close','Pips_Moved', 'garman_klass_vol']]
     push_dataframe_to_mongo(final_df,"hourly_data")
     final_df.to_csv("1h_analyze.csv", index=False, date_format='%Y-%m-%dT%H:%M:%SZ')
     logger.info(f"[{datetime.now()}]: [processing_hourly_movement] Data analysis finished, CSV created.")
