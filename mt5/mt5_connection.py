@@ -48,7 +48,7 @@ def get_symbol():
     return symbol_dict.get(session)
 
 
-def ohlcv(symbol, num_bars=250):
+def ohlc(symbol, num_bars=250):
     """Get historical OHLCV data for a symbol."""
 
     # import ipdb;ipdb.set_trace()
@@ -77,7 +77,7 @@ def ohlcv(symbol, num_bars=250):
     return data_ohlc
 
 # ep 5
-def hiddern_divergence(data,n=14):
+def hidden_divergence(data,n=14):
     data["H_Bear"] = data.iloc[argrelextrema(data.RSI.values, np.greater_equal, order=n)[0]]['RSI']
     data["H_Bull"] = data.iloc[argrelextrema(data.RSI.values, np.less_equal, order=n)[0]]['RSI']
     
@@ -94,9 +94,31 @@ def hiddern_divergence(data,n=14):
     return data
 
 
+# ep 6
+def stoch_crossover(data):
+    data["k-d"] = data.k-data.d
+    data["crossover"] = np.sign(data["k-d"]).diff().ne(0)
+    data.dropna(inplace=True)
+    data.iloc[0,3] = False
+    data["crossover"] = np.where(data["crossover"] == True, data["k-d"], np.nan)
+    return data
+
+
 def Strategy(data):
     data["RSI"] = ta.rsi(data["close"], timeperiod=14).fillna(0)
-    data = hiddern_divergence(data)
+    data = hidden_divergence(data)
+
+    stoch = data.ta.stoch(high = "high", low = "low", k=14, d=3)
+    stoch.rename(columns={"STOCHk_14_3_3": "k", "STOCHd_14_3_3": "d"}, inplace=True)
+    stoch = stoch_crossover(stoch)
+    data = pd.concat([data, stoch], axis=1).reindex(data.index)
+
+    data["EMA50"] = data["close"].ewm(span=50, adjust=False).mean()
+    data["EMA200"] = data["close"].ewm(span=200, adjust=False).mean()
+
+    data["short"] = (data["close"] < data["EMA50"]) & (data["close"] < data["EMA200"]) & (data["EMA50"] < data["EMA200"])
+    data["long"] = (data["close"] > data["EMA50"]) & (data["close"] > data["EMA200"]) & (data["EMA50"] > data["EMA200"])
+    
     return data
 
 
@@ -106,6 +128,6 @@ def Strategy(data):
 
 
 initialize_mt5()
-data = ohlcv('BTCUSD', 250)   
+data = ohlc('BTCUSD', 250)   
 data = Strategy(data)
 print(data[30:80])
