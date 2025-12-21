@@ -12,10 +12,9 @@ import time
 import pytz
 from scipy import signal
 from services import ensure_symbol, has_open_position
+from credentials import login, password, server
 
-login  = 83073970
-password = "Ansh@123"
-server = "Exness-MT5Trial12"
+
 
 SYMBOL    = "XAUUSDz"          
 LOT       = 0.01

@@ -18,3 +18,4 @@ secrets.json
 # Other files
 data_analyze.csv
 1h_analyze.csv
+credentials.py
