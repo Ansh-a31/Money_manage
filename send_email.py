@@ -1,6 +1,4 @@
-EMAIL_ADDRESS = "kanshuman571@gmail.com"
-EMAIL_PASSWORD = "aqqg xbbq ocxy vryo"
-RECIPIENT = "anshumanpep1111@gmail.com"
+from Algo.credentials import EMAIL_ADDRESS,EMAIL_PASSWORD,RECIPIENT
 
 import smtplib
 from email import encoders
