@@ -6,6 +6,10 @@ import time
 import pytz
 from scipy import signal
 from credentials import login, password, server
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from logger import logger
 
 
 SYMBOL    = "GBPUSDz"          
@@ -22,9 +26,24 @@ BARS_INIT = 500
 # ENSURE SYMBOL
 # ========================
 def ensure_symbol(symbol, timeout=10):
-    # import ipdb;ipdb.set_trace()
     if not mt5.symbol_select(symbol, True):
+        logger.error(f"Symbol not found: {symbol}")
         raise RuntimeError(f"Symbol not found: {symbol}")
+    logger.info(f"Symbol selected: {symbol}")
+
+
+# ========================
+# GET SYMBOLS BY KEYWORD
+# ========================
+def get_symbols_containing_specific_word(word: str) -> list:
+    symbols = mt5.symbols_get()
+    if symbols is None:
+        logger.warning("No symbols returned from MT5")
+        return []
+    result = [s.name for s in symbols if word.lower() in s.name.lower()]
+    logger.info(f"Symbols containing '{word}': {result}")
+    return result
+
 
 # ========================
 # GET LAST CLOSED CANDLE
@@ -45,88 +64,99 @@ def has_open_position():
 
 
 # ========================
-# 9 EMA CALCULATION
+# MT5/EXNESS EMA CALCULATION
 # ========================
+def _calculate_ema_mt5(df: pd.DataFrame, period: int, close_col: str = "close") -> float:
+    """
+    Replicates MT5/Exness EMA exactly:
+    - Seeds with SMA of first `period` candles
+    - Then applies EMA multiplier: alpha = 2 / (period + 1)
+    - adjust=False, min_periods=period
+    """
+    if len(df) < period:
+        raise ValueError(f"DataFrame must contain at least {period} candles")
+
+    close_prices = df[close_col].astype(float).values
+
+    # Seed: SMA of first `period` values (exactly how MT5 initializes)
+    ema = float(close_prices[:period].mean())
+    alpha = 2.0 / (period + 1)
+
+    for price in close_prices[period:]:
+        ema = alpha * price + (1 - alpha) * ema
+
+    return ema
+
+
 def calculate_ema_9_mt5(df: pd.DataFrame, close_col: str = "close") -> float:
-    """
-    Calculate EMA(9) for the last candle exactly like MT5.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing at least 9+ candles
-        close_col (str): Column name for close price
-
-    Returns:
-        float: EMA(9) value of the last candle
-    """
-
-    if len(df) < 9:
-        raise ValueError("DataFrame must contain at least 9 candles")
-
-    close_prices = df[close_col].astype(float)
-
-    # MT5-compatible EMA
-    ema = close_prices.ewm(
-        span=9,
-        adjust=False,   # CRITICAL: must be False
-        min_periods=15
-    ).mean()
-
-    return float(ema.iloc[-1])
+    return _calculate_ema_mt5(df, 9, close_col)
 
 
-
-# ========================
-# 60 EMA CALCULATION
-# ========================
 def calculate_ema_60_mt5(df: pd.DataFrame, close_col: str = "close") -> float:
+    return _calculate_ema_mt5(df, 60, close_col)
+
+
+def calculate_ema_200_mt5(df: pd.DataFrame, close_col: str = "close") -> float:
+    return _calculate_ema_mt5(df, 200, close_col)
+
+
+
+# ========================
+# CALCULATE 60 & 200 EMA FOR CURRENT CANDLE
+# ========================
+def calculate_ema_60_200_current_candle(symbol, timeframe, candle_time_ist) -> tuple:
     """
-    Calculate EMA(60) for the last candle exactly like MT5.
-
-    Requirements:
-    - DataFrame must contain at least 60 candles (1000 is perfect)
-    - Close prices must match MT5 chart closes exactly
+    Fetches enough candles and returns (ema_60, ema_200) for the current candle.
     """
+    NUM_CANDLES = 500  # enough for accurate 200 EMA
+    prev_candles_data = mt5.copy_rates_from(symbol, timeframe, candle_time_ist, NUM_CANDLES)
+    if prev_candles_data is None or len(prev_candles_data) < NUM_CANDLES:
+        raise ValueError("Not enough candle data available")
 
-    if len(df) < 60:
-        raise ValueError("DataFrame must contain at least 60 candles")
+    df = pd.DataFrame(prev_candles_data)
+    df["time"] = pd.to_datetime(df["time"], unit="s")
+    df.sort_values("time", inplace=True)
+    df.reset_index(drop=True, inplace=True)
 
-    close_prices = df[close_col].astype(float)
+    ema_60  = calculate_ema_60_mt5(df, "close")
+    ema_200 = calculate_ema_200_mt5(df, "close")
 
-    ema_60 = close_prices.ewm(
-        span=60, # smothning factor
-        adjust=False,     # CRITICAL for MT5 match
-        min_periods=100  # MT5 needs more data for accurate EMA
-    ).mean()
+    return ema_60, ema_200
 
-    return float(ema_60.iloc[-1])
 
 
 
 # ========================
 # ORDER EXECUTION
 # ========================
-def place_market_order(symbol, order_type, lot = LOT, time = None):
-    print(f"Sending order: {symbol}, type: {order_type}, time: {time}") # for testing
-    return None  # Temporarily disable order sending for safety
+def place_market_order(symbol, order_type, lot=LOT):
     tick = mt5.symbol_info_tick(symbol)
     if tick is None:
+        logger.error(f"Failed to get tick for {symbol}")
         return None
+
     price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
+    direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
+    logger.info(f"Placing {direction} order | symbol: {symbol} | lot: {lot} | price: {price}")
 
     request = {
-        "action": mt5.TRADE_ACTION_DEAL,
-        "symbol": symbol,
-        "volume": lot,
-        "type": order_type,
-        "price": price,
-        "deviation": 20,
-        "magic": MAGIC,
-        "comment": "EMA 9/200 crossover",
-        "type_time": mt5.ORDER_TIME_GTC,
+        "action":       mt5.TRADE_ACTION_DEAL,
+        "symbol":       symbol,
+        "volume":       lot,
+        "type":         order_type,
+        "price":        price,
+        "deviation":    20,
+        "magic":        MAGIC,
+        "comment":      "EMA 60/200 crossover",
+        "type_time":    mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
     }
-
+ 
     result = mt5.order_send(request)
-    print("Order result:", result)
+    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+        logger.error(f"Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+        return None
+
+    logger.info(f"Order placed | {direction} | symbol: {symbol} | lot: {lot} | price: {price} | ticket: {result.order}")
     return result
 

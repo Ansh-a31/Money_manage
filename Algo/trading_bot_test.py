@@ -19,7 +19,7 @@ from credentials import login, password, server
 SYMBOL    = "XAUUSDz"          
 LOT       = 0.01
 TIMEFRAME = mt5.TIMEFRAME_M5  # 5-minute chart
-EMA_FAST  = 9
+EMA_FAST  = 60
 EMA_SLOW  = 200
 MAGIC     = 10001
 BARS_INIT = 500
@@ -47,8 +47,8 @@ def backtest_strategy():
     import pytz
     # import ipdb;ipdb.set_trace()    
     # timezone = pytz.timezone("Etc/UTC")
-    utc_from = datetime(2025, 12, 17,1)
-    utc_to =  datetime(2025, 12, 18, 23)
+    utc_from = datetime(2026, 4, 10,17)
+    utc_to =  datetime(2026, 4, 14, 20)
     rate = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M5, utc_from, utc_to)
     if rate is None or len(rate) == 0:
         return None
@@ -84,13 +84,11 @@ def fetch_previous_candles_df(symbol, timeframe, candle, candle_time_ist,num_can
 def calculate_emas_at_timestamp(symbol, timeframe, candle, candle_time_ist):
     ''' 
         Fetch previous candles and calculate EMAs
-
     '''
-    # Fetch enough candles for slow EMA
-    previous_candle_data = fetch_previous_candles_df(symbol, timeframe, candle, candle_time_ist,EMA_SLOW) 
-    ema_fast = calculate_ema_9_mt5(previous_candle_data, "close")
-    ema_slow =calculate_ema_60_mt5(previous_candle_data, "close")
-    return ema_fast, ema_slow 
+    previous_candle_data = fetch_previous_candles_df(symbol, timeframe, candle, candle_time_ist, 500)
+    ema_fast = calculate_ema_60_mt5(previous_candle_data, "close")
+    ema_slow = calculate_ema_200_mt5(previous_candle_data, "close")
+    return ema_fast, ema_slow
 
     
 
@@ -98,7 +96,7 @@ def calculate_emas_at_timestamp(symbol, timeframe, candle, candle_time_ist):
 # EMA CROSSOVER DETECTION
 # =======================
 def detect_ema_crossover_signal(symbol, timeframe, candle_time, candle_time_ist):
-    # import ipdb;ipdb.set_trace()
+    # import ipdb;ipdb.set_trace()  
     rates = mt5.copy_rates_from(symbol, timeframe, candle_time, 2) # only two candles needed one previous and current
     if rates is None or len(rates) < 2:
         return None
@@ -111,14 +109,14 @@ def detect_ema_crossover_signal(symbol, timeframe, candle_time, candle_time_ist)
     curr_ema_fast, curr_ema_slow = calculate_emas_at_timestamp(symbol, timeframe, curr_time,candle_time_ist)
     prev_ema_fast, prev_ema_slow = calculate_emas_at_timestamp(symbol, timeframe, prev_time, prev_time_ist)
     if curr_ema_fast > curr_ema_slow and prev_ema_fast <= prev_ema_slow:
-        # import ipdb;ipdb.set_trace()
+        import ipdb;ipdb.set_trace()
         print("----------------------------------------------------------")
         print(f"Buy signal at {candle_time_ist} Values below.")
         print("curr_ema_fast:", curr_ema_fast, "curr_ema_slow:", curr_ema_slow)
         print("prev_ema_fast:", prev_ema_fast, "prev_ema_slow:", prev_ema_slow)
         return "BUY"
     elif curr_ema_fast < curr_ema_slow and prev_ema_fast >= prev_ema_slow:
-        # import ipdb;ipdb.set_trace()
+        import ipdb;ipdb.set_trace()
         print("----------------------------------------------------------")
         print(f"Sell signal at {candle_time_ist} Values below.")
         print("curr_ema_fast:", curr_ema_fast, "curr_ema_slow:", curr_ema_slow)
@@ -127,7 +125,20 @@ def detect_ema_crossover_signal(symbol, timeframe, candle_time, candle_time_ist)
 
     return None
 
-
+crossed = [ "2026-04-10 17:25:00",
+            "2026-04-10 17:30:00",
+            "2026-04-10 17:35:00",
+            "2026-04-10 17:40:00",
+            "2026-04-10 17:45:00",
+            "2026-04-10 17:50:00",
+            # "2026-04-10 18:20:00",
+            "2026-04-13 22:40:00",
+            "2026-04-13 22:45:00",
+            "2026-04-13 22:50:00",
+            "2026-04-13 22:55:00",
+            "2026-04-13 23:00:00",
+            "2026-04-13 23:05:00",
+            ]
 
 # ========================
 # Live Bot Execution
@@ -148,22 +159,25 @@ def run_bot_backtest():
 
         for i,j in tdf.iterrows():
             # print(j)
-            # if  j["time_ist"] == pd.Timestamp("2025-12-19 18:30:00").tz_localize("Asia/Kolkata") or j["time_ist"] == pd.Timestamp("2025-12-19 18:25:00").tz_localize("Asia/Kolkata"):
-            #         # import ipdb;ipdb.set_trace()
-                df = j
-                candle_time =  df["time_utc"].to_pydatetime()
-                candle_time_ist = df["time_ist"].to_pydatetime()
-                if candle_time != last_candle_time:
-                    last_candle_time = candle_time
-                    # print(f"New candle: {candle_time}")
-                    signal = detect_ema_crossover_signal(symbol=SYMBOL, timeframe=TIMEFRAME, candle_time=candle_time,candle_time_ist = candle_time_ist)
-                    if signal is not None:
-                        import ipdb;ipdb.set_trace()
-                        place_market_order(SYMBOL, signal)
-                    else:
-                        # print("No trade")
-                        pass
-            
+            IST = "Asia/Kolkata"
+            debug_times = [pd.Timestamp(t).tz_localize(IST) for t in crossed]
+            if j["time_ist"] in debug_times:
+                    # import ipdb;ipdb.set_trace()
+                    df = j
+                    candle_time =  df["time_utc"].to_pydatetime()
+                    candle_time_ist = df["time_ist"].to_pydatetime()
+                    if candle_time != last_candle_time:
+                        last_candle_time = candle_time
+                        # print(f"New candle: {candle_time}")
+                        signal = detect_ema_crossover_signal(symbol=SYMBOL, timeframe=TIMEFRAME, candle_time=candle_time,candle_time_ist = candle_time_ist)
+
+                        if signal is not None:
+                            import ipdb;ipdb.set_trace()
+                            place_market_order(SYMBOL, signal)
+                        else:
+                            print("No trade")
+                            pass
+                
         print("Waiting for next cycle...")
         time.sleep(15)
 
@@ -174,10 +188,11 @@ def run_bot_backtest():
 # ========================
 def main():
     try:
+        # import ipdb;ipdb.set_trace()
         connect_MT5()
-        ensure_symbol(SYMBOL)
-        # print(f"get symbols containing specific word :{get_symbols_containing_specific_word("XAU")}")
-
+        print(ensure_symbol(SYMBOL))
+        print(f"get symbols containing specific word :{get_symbols_containing_specific_word("XAU")}")
+        # print(f"Starting backtest...")
         run_bot_backtest()
 
     finally:
