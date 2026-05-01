@@ -23,29 +23,6 @@ BARS_INIT = 500
 
 
 # ========================
-# ENSURE SYMBOL
-# ========================
-def ensure_symbol(symbol, timeout=10):
-    if not mt5.symbol_select(symbol, True):
-        logger.error(f"Symbol not found: {symbol}")
-        raise RuntimeError(f"Symbol not found: {symbol}")
-    logger.info(f"Symbol selected: {symbol}")
-
-
-# ========================
-# GET SYMBOLS BY KEYWORD
-# ========================
-def get_symbols_containing_specific_word(word: str) -> list:
-    symbols = mt5.symbols_get()
-    if symbols is None:
-        logger.warning("No symbols returned from MT5")
-        return []
-    result = [s.name for s in symbols if word.lower() in s.name.lower()]
-    logger.info(f"Symbols containing '{word}': {result}")
-    return result
-
-
-# ========================
 # GET LAST CLOSED CANDLE
 # ========================
 def get_last_closed_candle():
@@ -129,7 +106,19 @@ def calculate_ema_60_200_current_candle(symbol, timeframe, candle_time_ist) -> t
 # ========================
 # ORDER EXECUTION
 # ========================
-def place_market_order(symbol, order_type, lot=LOT):
+SL_BUFFER = 2.0  # minimum points below/above rounded crossover price
+
+def _calc_sl(crossover_price: float, order_type) -> float:
+    """SL = floor of crossover price - SL_BUFFER (at least 2 points below rounded)."""
+    import math
+    rounded = math.floor(crossover_price)
+    if order_type == mt5.ORDER_TYPE_BUY:
+        return round(rounded - SL_BUFFER, 2)
+    else:
+        return round(math.ceil(crossover_price) + SL_BUFFER, 2)
+
+
+def place_market_order(symbol, order_type, lot=LOT, crossover_price=None):
     tick = mt5.symbol_info_tick(symbol)
     if tick is None:
         logger.error(f"Failed to get tick for {symbol}")
@@ -137,7 +126,16 @@ def place_market_order(symbol, order_type, lot=LOT):
 
     price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
     direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
-    logger.info(f"Placing {direction} order | symbol: {symbol} | lot: {lot} | price: {price}")
+
+    if crossover_price is not None:
+        sl = _calc_sl(crossover_price, order_type)
+        risk = abs(price - sl)
+        tp = round(price + risk, 2) if order_type == mt5.ORDER_TYPE_BUY else round(price - risk, 2)
+    else:
+        sl = 0.0
+        tp = 0.0
+
+    logger.info(f"Placing {direction} | symbol: {symbol} | lot: {lot} | price: {price} | SL: {sl} | TP: {tp}")
 
     request = {
         "action":       mt5.TRADE_ACTION_DEAL,
@@ -145,18 +143,20 @@ def place_market_order(symbol, order_type, lot=LOT):
         "volume":       lot,
         "type":         order_type,
         "price":        price,
+        "sl":           sl,
+        "tp":           tp,
         "deviation":    20,
         "magic":        MAGIC,
         "comment":      "EMA 60/200 crossover",
         "type_time":    mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
     }
- 
+
     result = mt5.order_send(request)
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
         logger.error(f"Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
         return None
 
-    logger.info(f"Order placed | {direction} | symbol: {symbol} | lot: {lot} | price: {price} | ticket: {result.order}")
+    logger.info(f"Order placed | {direction} | symbol: {symbol} | lot: {lot} | price: {price} | SL: {sl} | TP: {tp} | ticket: {result.order}")
     return result
 

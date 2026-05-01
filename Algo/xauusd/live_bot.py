@@ -11,7 +11,7 @@ import sys
 import os
 import ctypes
 from datetime import datetime, timezone
-from services import (
+from Algo.xauusd.services import (
     ensure_symbol,
     place_market_order,
     calculate_ema_60_mt5,
@@ -114,13 +114,13 @@ def detect_crossover(candle_time_utc: datetime, candle_time_ist: datetime):
     logger.info(f"Candle: {candle_time_ist} | EMA60: {curr_ema_60:.4f} | EMA200: {curr_ema_200:.4f}")
 
     if curr_ema_60 > curr_ema_200 and prev_ema_60 <= prev_ema_200:
-        logger.info(f"BUY crossover detected at {candle_time_ist}")
-        return mt5.ORDER_TYPE_BUY
+        logger.info(f"BUY crossover detected at {candle_time_ist} | crossover price: {curr_ema_60:.4f}")
+        return mt5.ORDER_TYPE_BUY, curr_ema_60
     elif curr_ema_60 < curr_ema_200 and prev_ema_60 >= prev_ema_200:
-        logger.info(f"SELL crossover detected at {candle_time_ist}")
-        return mt5.ORDER_TYPE_SELL
+        logger.info(f"SELL crossover detected at {candle_time_ist} | crossover price: {curr_ema_60:.4f}")
+        return mt5.ORDER_TYPE_SELL, curr_ema_60
 
-    return None
+    return None, None
 
 
 # ========================
@@ -131,9 +131,9 @@ def process_candle(rate: dict):
     candle_time_utc = datetime.fromtimestamp(rate["time"], tz=timezone.utc)
     candle_time_ist = candle_time_utc.astimezone(IST)
     logger.info(f"Processing candle: {candle_time_ist}")
-    signal = detect_crossover(candle_time_utc, candle_time_ist)
+    signal, crossover_price = detect_crossover(candle_time_utc, candle_time_ist)
     if signal is not None:
-        place_market_order(SYMBOL, signal, LOT)
+        place_market_order(SYMBOL, signal, LOT, crossover_price)
     else:
         logger.info("No crossover signal")
 

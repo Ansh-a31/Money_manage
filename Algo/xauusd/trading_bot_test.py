@@ -11,7 +11,7 @@ from datetime import datetime,timedelta,timezone
 import time
 import pytz
 from scipy import signal
-from services import *
+from Algo.xauusd.services import *
 from credentials import login, password, server
 
 
@@ -114,16 +114,16 @@ def detect_ema_crossover_signal(symbol, timeframe, candle_time, candle_time_ist)
         print(f"Buy signal at {candle_time_ist} Values below.")
         print("curr_ema_fast:", curr_ema_fast, "curr_ema_slow:", curr_ema_slow)
         print("prev_ema_fast:", prev_ema_fast, "prev_ema_slow:", prev_ema_slow)
-        return "BUY"
+        return "BUY", curr_ema_fast
     elif curr_ema_fast < curr_ema_slow and prev_ema_fast >= prev_ema_slow:
         import ipdb;ipdb.set_trace()
         print("----------------------------------------------------------")
         print(f"Sell signal at {candle_time_ist} Values below.")
         print("curr_ema_fast:", curr_ema_fast, "curr_ema_slow:", curr_ema_slow)
         print("prev_ema_fast:", prev_ema_fast, "prev_ema_slow:", prev_ema_slow)
-        return "SELL"
+        return "SELL", curr_ema_fast
 
-    return None
+    return None, None
 
 crossed = [ "2026-04-10 17:25:00",
             "2026-04-10 17:30:00",
@@ -169,11 +169,11 @@ def run_bot_backtest():
                     if candle_time != last_candle_time:
                         last_candle_time = candle_time
                         # print(f"New candle: {candle_time}")
-                        signal = detect_ema_crossover_signal(symbol=SYMBOL, timeframe=TIMEFRAME, candle_time=candle_time,candle_time_ist = candle_time_ist)
+                        signal, crossover_price = detect_ema_crossover_signal(symbol=SYMBOL, timeframe=TIMEFRAME, candle_time=candle_time, candle_time_ist=candle_time_ist)
 
                         if signal is not None:
                             import ipdb;ipdb.set_trace()
-                            place_market_order(SYMBOL, signal)
+                            place_market_order(SYMBOL, signal, LOT, crossover_price)
                         else:
                             print("No trade")
                             pass
