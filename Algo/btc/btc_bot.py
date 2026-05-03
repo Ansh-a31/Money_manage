@@ -1,5 +1,5 @@
 '''
-BTC Live trading bot — EMA 9/15 crossover strategy.
+BTC Live trading bot — EMA 9/200 crossover strategy.
 Runs on live MT5 data and executes trades on crossover signals.
 '''
 
@@ -10,14 +10,14 @@ import time
 import ctypes
 from datetime import datetime, timezone
 from Algo.btc.btc_service import place_market_order, has_open_position
-from Algo.common.common import ensure_symbol, calculate_ema_9_mt5, calculate_ema_15_mt5
+from Algo.common.common import ensure_symbol, calculate_ema_9_mt5, calculate_ema_15_mt5,calculate_ema_200_mt5
 from Algo.credentials import login, password, server
 from Algo.logger import logger,BOLD,RESET
 
 
 SYMBOL      = "BTCUSDz"
 LOT         = 0.2
-TIMEFRAME   = mt5.TIMEFRAME_M1
+TIMEFRAME   = mt5.TIMEFRAME_M5
 IST         = pytz.timezone("Asia/Kolkata")
 NUM_CANDLES = 500
 
@@ -91,18 +91,18 @@ def detect_crossover(candle_time_utc: datetime, candle_time_ist: datetime):
         return None, None
 
     curr_ema_9  = calculate_ema_9_mt5(_candle_cache)
-    curr_ema_15 = calculate_ema_15_mt5(_candle_cache)
+    curr_ema_200 = calculate_ema_200_mt5(_candle_cache)
 
     prev_df     = _candle_cache.iloc[:-1]
     prev_ema_9  = calculate_ema_9_mt5(prev_df)
-    prev_ema_15 = calculate_ema_15_mt5(prev_df)
+    prev_ema_200 = calculate_ema_200_mt5(prev_df)
 
-    logger.info(f"Candle: {candle_time_ist} | EMA9: {curr_ema_9:.2f} | EMA15: {curr_ema_15:.2f}")
+    logger.info(f"Candle: {candle_time_ist} | EMA9: {curr_ema_9:.2f} | EMA200: {curr_ema_200:.2f}")
 
-    if curr_ema_9 > curr_ema_15 and prev_ema_9 <= prev_ema_15:
+    if curr_ema_9 > curr_ema_200 and prev_ema_9 <= prev_ema_200:
         logger.info(f"BUY crossover detected at {candle_time_ist} | crossover price: {curr_ema_9:.2f}")
         return mt5.ORDER_TYPE_BUY, curr_ema_9
-    elif curr_ema_9 < curr_ema_15 and prev_ema_9 >= prev_ema_15:
+    elif curr_ema_9 < curr_ema_200 and prev_ema_9 >= prev_ema_200:
         logger.info(f"SELL crossover detected at {candle_time_ist} | crossover price: {curr_ema_9:.2f}")
         return mt5.ORDER_TYPE_SELL, curr_ema_9
 
@@ -146,7 +146,7 @@ def run_live_bot():
             rates = mt5.copy_rates_from_pos(SYMBOL, TIMEFRAME, 1, 10)
             if rates is None or len(rates) == 0:
                 logger.warning("No rates received, retrying...")
-                time.sleep(5)
+                time.sleep(30)
                 continue
 
             new_rates = [
@@ -156,7 +156,7 @@ def run_live_bot():
             ]
 
             if not new_rates:
-                time.sleep(5)
+                time.sleep(30)
                 continue
 
             if len(new_rates) > 1:
@@ -183,7 +183,7 @@ def main():
         prevent_sleep()
         ensure_symbol(SYMBOL)
         init_candle_cache()
-        logger.info(f"BTC live bot started | symbol: {SYMBOL} | EMA 9/15 | timeframe: {TIMEFRAME}")
+        logger.info(f"BTC live bot started | symbol: {SYMBOL} | EMA 9/200 | timeframe: {TIMEFRAME}")
         run_live_bot()
     finally:
         allow_sleep()
