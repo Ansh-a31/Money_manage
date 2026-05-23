@@ -34,11 +34,11 @@ def has_open_position(symbol):
 # ========================
 # SL CALCULATION
 # ========================
-def _calc_sl(symbol: str, crossover_price: float, order_type, price: float) -> float:
+def _calc_sl(symbol: str, crossover_price: float, order_type, price: float, sl_points: float = SL_BUFFER) -> float:
     # import ipdb;ipdb.set_trace()
     info = mt5.symbol_info(symbol)
-    min_distance = (info.trade_stops_level * info.point) if (info and info.trade_stops_level > 0) else SL_BUFFER
-    effective_buffer = max(SL_BUFFER, min_distance * 1.1)
+    min_distance = (info.trade_stops_level * info.point) if (info and info.trade_stops_level > 0) else sl_points
+    effective_buffer = max(sl_points, min_distance * 1.1)
     
     if order_type == mt5.ORDER_TYPE_BUY:
         sl = crossover_price - effective_buffer
@@ -51,8 +51,8 @@ def _calc_sl(symbol: str, crossover_price: float, order_type, price: float) -> f
 # ========================
 # ORDER EXECUTION
 # ========================
-def place_market_order(symbol, order_type, lot=0.01, crossover_price=None):
-    logger.info(f"[place_market_order]: symbol={symbol}, order_type={order_type}, lot={lot}, crossover_price={crossover_price}")
+def place_market_order(symbol, order_type, lot=0.01, crossover_price=None, sl_points=None):
+    logger.info(f"[place_market_order]: symbol={symbol}, order_type={order_type}, lot={lot}, crossover_price={crossover_price}, sl_points={sl_points}")
     tick = mt5.symbol_info_tick(symbol)
     if tick is None:
         logger.error(f"Failed to get tick for {symbol}")
@@ -62,7 +62,9 @@ def place_market_order(symbol, order_type, lot=0.01, crossover_price=None):
     direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
 
     if crossover_price is not None:
-        sl   = _calc_sl(symbol, crossover_price, order_type, price)
+        # Use custom SL points if provided, otherwise use default SL_BUFFER
+        sl_buffer = sl_points if sl_points is not None else SL_BUFFER
+        sl   = _calc_sl(symbol, crossover_price, order_type, price, sl_buffer)
         risk = abs(price - sl)
         tp   = round(price + (risk * 2), 2) if order_type == mt5.ORDER_TYPE_BUY else round(price - (risk * 2), 2)
     else:
@@ -81,7 +83,7 @@ def place_market_order(symbol, order_type, lot=0.01, crossover_price=None):
         "tp":           tp,
         "deviation":    50,
         "magic":        MAGIC,
-        "comment":      "EMA 9/15 crossover",
+        "comment":      "EMA 9/200 crossover",
         "type_time":    mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
     }

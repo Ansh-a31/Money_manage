@@ -1,5 +1,48 @@
 # For testing purposes only, not for production use
 
+"""
+BTC EMA200 Touch Monitor & EMA9/200 Crossover Trading Bot
+
+This module monitors BTC (BTCUSDz) on M5 timeframe and performs two main functions:
+
+1. EMA200 TOUCH MONITORING:
+   - Monitors when BTC price touches EMA200 (within 60 points buffer)
+   - Sends email alerts when touch is detected
+   - Implements 4-minute cooldown between alerts to prevent spam
+
+2. EMA9/200 CROSSOVER TRADING:
+   - Detects bullish crossover (EMA9 crosses above EMA200)
+   - Detects bearish crossover (EMA9 crosses below EMA200)
+   - Automatically executes trades on crossover signals
+   - BUY on bullish crossover, SELL on bearish crossover
+   - Stop Loss: 100 points from crossover price (EMA9)
+   - Take Profit: 2:1 risk-reward ratio (200 points)
+   - Sends email notification on every trade execution
+   - Implements 4-minute cooldown between trades
+   - Checks for existing positions before opening new trades
+
+KEY FEATURES:
+- Real-time monitoring with 2-second polling interval
+- Price validation before trade execution
+- Separate cooldown timers for touch alerts and crossover trades
+- Email notifications for both price touches and trade executions
+- Backtest capability for historical analysis
+- MT5 integration for live trading
+
+CONFIGURATION:
+- Symbol: BTCUSDz
+- Timeframe: M5 (5 minutes)
+- Touch Buffer: 60 points
+- Alert Cooldown: 4 minutes
+- Lot Size: 0.01
+- SL Points: 100
+- Poll Interval: 2 seconds
+
+USAGE:
+- Run monitor.run() for real-time monitoring and trading
+- Run monitor.backtest_24h() for historical backtesting
+"""
+
 import time
 import MetaTrader5 as mt5
 import pandas as pd
@@ -8,26 +51,34 @@ from Algo.common.common import _calculate_ema_mt5
 from Algo.credentials import login, password, server
 from Algo.logger import logger
 from communication.send_email import send_email_price_alert
+from Algo.btc.btc_service import place_market_order, has_open_position
 
 
 class EMA200TouchMonitor:
     """
     Monitors BTC price against the 200 EMA on M5 timeframe.
-    Sends an email alert when price touches the EMA.
-    Prevents duplicate alerts until price moves away and returns.
+    Sends an email alert when:
+    1. Price touches the EMA200
+    2. EMA9 crosses EMA200 (bullish or bearish)
+    Prevents duplicate alerts with 5-minute cooldown.
     """
 
     SYMBOL       = "BTCUSDz"
     TIMEFRAME    = mt5.TIMEFRAME_M5
-    TOUCH_BUFFER = 60.0   # points within EMA200 considered a "touch"
+    TOUCH_BUFFER = 40.0   # points within EMA200 considered a "touch"
     POLL_INTERVAL = 2     # seconds between each price check
     NUM_CANDLES  = 500
     ALERT_COOLDOWN_MINUTES = 4  # minimum minutes between alerts
+    LOT_SIZE = 0.1  # trading lot size
+    SL_POINTS = 100.0  # stop loss points from crossover price
 
     def __init__(self):
         self._already_alerted = False
         # self._last_alert_time = {}  # Tracks last alert time per symbol/event
         self._last_real_alert_time = None  # Tracks last alert time for real-time monitoring
+        self._last_crossover_alert_time = None  # Tracks last EMA9/200 crossover alert
+        self._prev_ema9 = None  # Previous EMA9 value for crossover detection
+        self._prev_ema200 = None  # Previous EMA200 value for crossover detection
 
     # ========================
     # MT5 CONNECTION
@@ -53,6 +104,16 @@ class EMA200TouchMonitor:
         df = pd.DataFrame(rates)
         ema = _calculate_ema_mt5(df, 200, "close") + 3        # adding 5 points to EMA200 to create a buffer zone for matching exact value
         logger.debug(f"EMA200 calculated: {ema:.2f}")
+        return ema
+
+    def _get_ema_9(self) -> float:
+        rates = mt5.copy_rates_from_pos(self.SYMBOL, self.TIMEFRAME, 0, self.NUM_CANDLES)
+        if rates is None or len(rates) < 200:
+            logger.error(f"Not enough candle data for EMA 9 | received: {len(rates) if rates is not None else 0}")
+            raise ValueError("Not enough candle data for EMA 9")
+        df = pd.DataFrame(rates)
+        ema = _calculate_ema_mt5(df, 9, "close")
+        logger.debug(f"EMA9 calculated: {ema:.2f}")
         return ema 
 
     # ========================
@@ -70,6 +131,67 @@ class EMA200TouchMonitor:
         send_email_price_alert(msg)
         logger.info(f"Email sent successfully | price: {current_price:.2f} | EMA200: {ema_200:.2f}")
 
+    def _send_crossover_alert(self, ema_9: float, ema_200: float, crossover_type: str):
+        msg = (
+            f"BTC EMA Crossover Alert!\n\n"
+            f"Symbol: {self.SYMBOL}\n"
+            f"Crossover Type: {crossover_type}\n"
+            f"EMA 9 (M5): {ema_9:.2f}\n"
+            f"EMA 200 (M5): {ema_200:.2f}\n"
+        )
+        logger.info(f"Sending crossover alert email | type: {crossover_type} | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f}")
+        send_email_price_alert(msg)
+        logger.info(f"Crossover email sent successfully | type: {crossover_type}")
+
+    def _send_trade_execution_alert(self, direction: str, execution_price: float, ema_9: float, ema_200: float, result):
+        """Send email notification when trade is executed"""
+        # Calculate SL and TP from result
+        tick = mt5.symbol_info_tick(self.SYMBOL)
+        sl_price = result.price - self.SL_POINTS if direction == "BUY" else result.price + self.SL_POINTS
+        risk = abs(result.price - sl_price)
+        tp_price = result.price + (risk * 2) if direction == "BUY" else result.price - (risk * 2)
+        
+        msg = (
+            f"BTC Trade Executed!\n\n"
+            f"Symbol: {self.SYMBOL}\n"
+            f"Direction: {direction}\n"
+            f"Ticket: {result.order}\n"
+            f"Execution Price: {execution_price:.2f}\n"
+            f"Lot Size: {self.LOT_SIZE}\n"
+            f"Stop Loss: {sl_price:.2f} ({self.SL_POINTS} points)\n"
+            f"Take Profit: {tp_price:.2f} (2:1 R:R)\n\n"
+            f"Crossover Details:\n"
+            f"EMA 9: {ema_9:.2f}\n"
+            f"EMA 200: {ema_200:.2f}\n"
+        )
+        logger.info(f"Sending trade execution email | {direction} | ticket: {result.order} | price: {execution_price:.2f}")
+        send_email_price_alert(msg)
+        logger.info(f"Trade execution email sent successfully | {direction} | ticket: {result.order}")
+
+    def _execute_crossover_trade(self, ema_9: float, ema_200: float, order_type):
+        """Execute trade on EMA9/200 crossover with 100 point SL"""
+        direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
+        
+        # Check if position already exists
+        if has_open_position(self.SYMBOL):
+            logger.info(f"Crossover detected but skipping trade — open position already exists for {self.SYMBOL}")
+            return None
+        
+        # Use EMA9 as crossover price for SL calculation
+        crossover_price = ema_9
+        
+        logger.info(f"Executing {direction} trade on crossover | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f} | crossover_price: {crossover_price:.2f} | SL_points: {self.SL_POINTS}")
+        result = place_market_order(self.SYMBOL, order_type, self.LOT_SIZE, crossover_price, self.SL_POINTS)
+        
+        if result:
+            logger.info(f"Crossover trade executed successfully | {direction} | ticket: {result.order}")
+            # Send email notification
+            self._send_trade_execution_alert(direction, execution_price, ema_9, ema_200, result)
+        else:
+            logger.error(f"Failed to execute crossover trade | {direction}")
+        
+        return result
+
     # ========================
     # SINGLE TICK CHECK
     # ========================
@@ -83,11 +205,51 @@ class EMA200TouchMonitor:
 
         current_price = tick.bid
         ema_200       = self._get_ema_200()
+        ema_9         = self._get_ema_9()
         distance      = abs(current_price - ema_200)
         current_time  = datetime.now(timezone.utc)
 
-        logger.info(f"Price: {current_price:.2f} | EMA200: {ema_200:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
+        logger.info(f"Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
 
+        # Check for EMA9/200 crossover
+        if self._prev_ema9 is not None and self._prev_ema200 is not None:
+            # Bullish crossover: EMA9 crosses above EMA200
+            if ema_9 > ema_200 and self._prev_ema9 <= self._prev_ema200:
+                should_trade = False
+                if self._last_crossover_alert_time is None:
+                    should_trade = True
+                else:
+                    time_diff_minutes = (current_time - self._last_crossover_alert_time).total_seconds() / 60
+                    if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
+                        should_trade = True
+                        logger.info(f"Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
+
+                if should_trade:
+                    logger.info(f"*** BULLISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed above EMA200: {ema_200:.2f}")
+                    self._execute_crossover_trade(ema_9, ema_200, mt5.ORDER_TYPE_BUY)
+                    self._last_crossover_alert_time = current_time
+
+            # Bearish crossover: EMA9 crosses below EMA200
+            elif ema_9 < ema_200 and self._prev_ema9 >= self._prev_ema200:
+                should_trade = False
+                if self._last_crossover_alert_time is None:
+                    should_trade = True
+                else:
+                    time_diff_minutes = (current_time - self._last_crossover_alert_time).total_seconds() / 60
+                    if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
+                        should_trade = True
+                        logger.info(f"Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
+
+                if should_trade:
+                    logger.info(f"*** BEARISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed below EMA200: {ema_200:.2f}")
+                    self._execute_crossover_trade(ema_9, ema_200, mt5.ORDER_TYPE_SELL)
+                    self._last_crossover_alert_time = current_time
+
+        # Update previous EMA values for next iteration
+        self._prev_ema9 = ema_9
+        self._prev_ema200 = ema_200
+
+        # Check for price touching EMA200
         if distance <= self.TOUCH_BUFFER:
             # Check if we should trigger alert (5+ minutes since last alert)
             should_alert = False
