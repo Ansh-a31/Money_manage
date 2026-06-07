@@ -1,0 +1,11 @@
+'''
+                                        XAUUSD Observation Notes.
+'''
+
+'''
+                                        XAUUSD Strategy 4h.
+1. SL When 9 EMA crosses 15 EMA in against side of the trade.
+2. TP: 200 dollars
+3. Lot size: 0.1         --not confirmed
+4. Backtested from Jan 2026 year to may 2026, working  effectively.
+'''

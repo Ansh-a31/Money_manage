@@ -5,7 +5,41 @@ from datetime import datetime, timedelta, timezone
 import time
 import pytz
 from scipy import signal
+import ctypes
 from Algo.logger import logger
+
+
+# ========================
+# PREVENT WINDOWS SLEEP
+# ========================
+ES_CONTINUOUS       = 0x80000000
+ES_SYSTEM_REQUIRED  = 0x00000001
+ES_DISPLAY_REQUIRED = 0x00000002
+
+def prevent_sleep():
+    """
+    Prevents Windows from sleeping or turning off display while script runs.
+    Call this function at the start of your script to keep it running even when screen sleeps.
+    
+    Usage:
+        from Algo.common.common import prevent_sleep, allow_sleep
+        
+        prevent_sleep()  # Enable sleep prevention
+        # Your script logic here
+        allow_sleep()    # Restore normal sleep behavior (optional, on script exit)
+    """
+    ctypes.windll.kernel32.SetThreadExecutionState(
+        ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+    )
+    logger.info("Sleep prevention enabled - script will continue running even when screen sleeps")
+
+def allow_sleep():
+    """
+    Restores normal Windows sleep behavior.
+    Call this function when you want to allow the system to sleep again.
+    """
+    ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+    logger.info("Sleep prevention disabled - normal sleep behavior restored")
 
 
 

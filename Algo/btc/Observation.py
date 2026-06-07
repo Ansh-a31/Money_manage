@@ -9,5 +9,13 @@
 
 2.  Trade values change too fast in time between the moment we detect crossover and the moment we place order, causing us to miss trades or get bad fills.
 
+'''
 
+
+'''
+                                        BTC Strategy 4h.
+1. SL When 9 EMA crosses 200EMA in against side of the trade.
+2. TP: 500 dollars
+3. Lot size: 0.2
+4. Backtested on whole 2025 year to may 2026, and working very effectively.
 '''
