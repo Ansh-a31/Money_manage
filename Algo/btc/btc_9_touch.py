@@ -87,12 +87,12 @@ class EMA200TouchMonitor:
     # ========================
     def connect(self) -> bool:
         if not mt5.initialize():
-            logger.error(f"MT5 init failed: {mt5.last_error()}")
+            logger.error(f"[connect]: MT5 init failed: {mt5.last_error()}")
             return False
         if not mt5.login(login, password, server):
-            logger.error(f"MT5 login failed: {mt5.last_error()}")
+            logger.error(f"[connect]: MT5 login failed: {mt5.last_error()}")
             return False
-        logger.info("Connected to MT5 successfully")
+        logger.info(f"[connect]: Connected to MT5 successfully")
         return True
 
 
@@ -102,21 +102,21 @@ class EMA200TouchMonitor:
     def _get_ema_200(self) -> float:
         rates = mt5.copy_rates_from_pos(self.SYMBOL, self.TIMEFRAME, 0, self.NUM_CANDLES)
         if rates is None or len(rates) < 200:
-            logger.error(f"Not enough candle data for EMA 200 | received: {len(rates) if rates is not None else 0}")
+            logger.error(f"[_get_ema_200]: Not enough candle data for EMA 200 | received: {len(rates) if rates is not None else 0}")
             raise ValueError("Not enough candle data for EMA 200")
         df = pd.DataFrame(rates)
         ema = _calculate_ema_mt5(df, 200, "close") + 3        # adding 5 points to EMA200 to create a buffer zone for matching exact value
-        logger.debug(f"EMA200 calculated: {ema:.2f}")
+        logger.debug(f"[_get_ema_200]: EMA200 calculated: {ema:.2f}")
         return ema
 
     def _get_ema_9(self) -> float:
         rates = mt5.copy_rates_from_pos(self.SYMBOL, self.TIMEFRAME, 0, self.NUM_CANDLES)
         if rates is None or len(rates) < 200:
-            logger.error(f"Not enough candle data for EMA 9 | received: {len(rates) if rates is not None else 0}")
+            logger.error(f"[_get_ema_9]: Not enough candle data for EMA 9 | received: {len(rates) if rates is not None else 0}")
             raise ValueError("Not enough candle data for EMA 9")
         df = pd.DataFrame(rates)
         ema = _calculate_ema_mt5(df, 9, "close")
-        logger.debug(f"EMA9 calculated: {ema:.2f}")
+        logger.debug(f"[_get_ema_9]: EMA9 calculated: {ema:.2f}")
         return ema 
 
     # ========================
@@ -130,9 +130,9 @@ class EMA200TouchMonitor:
             f"EMA 200 (M5): {ema_200:.2f}\n"
             f"Distance: {distance:.2f} points"
         )
-        logger.info(f"Sending touch alert email | price: {current_price:.2f} | EMA200: {ema_200:.2f} | distance: {distance:.2f}")
+        logger.info(f"[_send_touch_alert]: Sending touch alert email | price: {current_price:.2f} | EMA200: {ema_200:.2f} | distance: {distance:.2f}")
         send_email_price_alert(msg)
-        logger.info(f"Email sent successfully | price: {current_price:.2f} | EMA200: {ema_200:.2f}")
+        logger.info(f"[_send_touch_alert]: Email sent successfully | price: {current_price:.2f} | EMA200: {ema_200:.2f}")
 
     def _send_crossover_alert(self, ema_9: float, ema_200: float, crossover_type: str):
         msg = (
@@ -142,9 +142,9 @@ class EMA200TouchMonitor:
             f"EMA 9 (M5): {ema_9:.2f}\n"
             f"EMA 200 (M5): {ema_200:.2f}\n"
         )
-        logger.info(f"Sending crossover alert email | type: {crossover_type} | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f}")
+        logger.info(f"[_send_crossover_alert]: Sending crossover alert email | type: {crossover_type} | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f}")
         send_email_price_alert(msg)
-        logger.info(f"Crossover email sent successfully | type: {crossover_type}")
+        logger.info(f"[_send_crossover_alert]: Crossover email sent successfully | type: {crossover_type}")
 
     def _send_trade_execution_alert(self, direction: str, execution_price: float, ema_9: float, ema_200: float, result):
         """Send email notification when trade is executed"""
@@ -165,15 +165,15 @@ class EMA200TouchMonitor:
             f"EMA 9: {ema_9:.2f}\n"
             f"EMA 200: {ema_200:.2f}\n"
         )
-        logger.info(f"Sending trade execution email | {direction} | ticket: {result.order} | price: {execution_price:.2f}")
+        logger.info(f"[_send_trade_execution_alert]: Sending trade execution email | {direction} | ticket: {result.order} | price: {execution_price:.2f}")
         send_email_price_alert(msg)
-        logger.info(f"Trade execution email sent successfully | {direction} | ticket: {result.order}")
+        logger.info(f"[_send_trade_execution_alert]: Trade execution email sent successfully | {direction} | ticket: {result.order}")
 
     def _place_order(self, order_type, execution_price):
         """Place market order with SL and TP set"""
         tick = mt5.symbol_info_tick(self.SYMBOL)
         if tick is None:
-            logger.error(f"Failed to get tick for {self.SYMBOL}")
+            logger.error(f"[_place_order]: Failed to get tick for {self.SYMBOL}")
             return None
         
         price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
@@ -187,7 +187,7 @@ class EMA200TouchMonitor:
             sl = execution_price + self.SL_POINTS
             tp = execution_price - self.TP_POINTS
         
-        logger.info(f"Placing {direction} order | symbol: {self.SYMBOL} | lot: {self.LOT_SIZE} | price: {price} | SL: {sl:.2f} | TP: {tp:.2f}")
+        logger.info(f"[_place_order]: Placing {direction} order | symbol: {self.SYMBOL} | lot: {self.LOT_SIZE} | price: {price} | SL: {sl:.2f} | TP: {tp:.2f}")
         
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -206,10 +206,10 @@ class EMA200TouchMonitor:
         
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            logger.error(f"Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+            logger.error(f"[_place_order]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
             return None
         
-        logger.info(f"Order placed successfully | {direction} | ticket: {result.order} | price: {price} | SL: {sl:.2f} | TP: {tp:.2f}")
+        logger.info(f"[_place_order]: Order placed successfully | {direction} | ticket: {result.order} | price: {price} | SL: {sl:.2f} | TP: {tp:.2f}")
         return result
 
     def _execute_crossover_trade(self, ema_9: float, ema_200: float, order_type):
@@ -218,13 +218,13 @@ class EMA200TouchMonitor:
         
         # Check if position already exists
         if has_open_position(self.SYMBOL):
-            logger.info(f"Crossover detected but skipping trade — open position already exists for {self.SYMBOL}")
+            logger.info(f"[_execute_crossover_trade]: Crossover detected but skipping trade — open position already exists for {self.SYMBOL}")
             return None
         
         # Get current market price
         tick = mt5.symbol_info_tick(self.SYMBOL)
         if tick is None:
-            logger.error(f"Failed to get tick for {self.SYMBOL}")
+            logger.error(f"[_execute_crossover_trade]: Failed to get tick for {self.SYMBOL}")
             return None
         
         current_price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
@@ -235,23 +235,23 @@ class EMA200TouchMonitor:
         price_diff = abs(current_price - crossover_price)
         
         if price_diff <= price_tolerance:
-            logger.info(f"Current price {current_price:.2f} matches crossover price {crossover_price:.2f} (diff: {price_diff:.2f} points)")
+            logger.info(f"[_execute_crossover_trade]: Current price {current_price:.2f} matches crossover price {crossover_price:.2f} (diff: {price_diff:.2f} points)")
             execution_price = current_price
         else:
-            logger.warning(f"Current price {current_price:.2f} differs from crossover price {crossover_price:.2f} (diff: {price_diff:.2f} points) — executing at current price")
+            logger.warning(f"[_execute_crossover_trade]: Current price {current_price:.2f} differs from crossover price {crossover_price:.2f} (diff: {price_diff:.2f} points) — executing at current price")
             execution_price = current_price
         
-        logger.info(f"Executing {direction} trade on crossover | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f} | execution_price: {execution_price:.2f} | SL: {self.SL_POINTS} points | TP: {self.TP_POINTS} points")
+        logger.info(f"[_execute_crossover_trade]: Executing {direction} trade on crossover | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f} | execution_price: {execution_price:.2f} | SL: {self.SL_POINTS} points | TP: {self.TP_POINTS} points")
         
         # Place order with SL and TP
         result = self._place_order(order_type, execution_price)
         
         if result:
-            logger.info(f"Crossover trade executed successfully | {direction} | ticket: {result.order}")
+            logger.info(f"[_execute_crossover_trade]: Crossover trade executed successfully | {direction} | ticket: {result.order}")
             # Send email notification
             self._send_trade_execution_alert(direction, execution_price, ema_9, ema_200, result)
         else:
-            logger.error(f"Failed to execute crossover trade | {direction}")
+            logger.error(f"[_execute_crossover_trade]: Failed to execute crossover trade | {direction}")
         
         return result
 
@@ -263,7 +263,7 @@ class EMA200TouchMonitor:
         
         tick = mt5.symbol_info_tick(self.SYMBOL)
         if tick is None:
-            logger.warning(f"Failed to get tick for {self.SYMBOL}, retrying...")
+            logger.warning(f"[_check_tick]: Failed to get tick for {self.SYMBOL}, retrying...")
             return
 
         current_price = tick.bid
@@ -272,7 +272,7 @@ class EMA200TouchMonitor:
         distance      = abs(current_price - ema_200)
         current_time  = datetime.now(timezone.utc)
 
-        logger.info(f"Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
+        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA200: {ema_200:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
 
         # Check for EMA9/200 crossover
         if self._prev_ema9 is not None and self._prev_ema200 is not None:
@@ -285,10 +285,10 @@ class EMA200TouchMonitor:
                     time_diff_minutes = (current_time - self._last_crossover_alert_time).total_seconds() / 60
                     if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
                         should_trade = True
-                        logger.info(f"Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
+                        logger.info(f"[_check_tick]: Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
 
                 if should_trade:
-                    logger.info(f"*** BULLISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed above EMA200: {ema_200:.2f}")
+                    logger.info(f"[_check_tick]: *** BULLISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed above EMA200: {ema_200:.2f}")
                     self._execute_crossover_trade(ema_9, ema_200, mt5.ORDER_TYPE_BUY)
                     self._last_crossover_alert_time = current_time
 
@@ -301,10 +301,10 @@ class EMA200TouchMonitor:
                     time_diff_minutes = (current_time - self._last_crossover_alert_time).total_seconds() / 60
                     if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
                         should_trade = True
-                        logger.info(f"Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
+                        logger.info(f"[_check_tick]: Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
 
                 if should_trade:
-                    logger.info(f"*** BEARISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed below EMA200: {ema_200:.2f}")
+                    logger.info(f"[_check_tick]: *** BEARISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed below EMA200: {ema_200:.2f}")
                     self._execute_crossover_trade(ema_9, ema_200, mt5.ORDER_TYPE_SELL)
                     self._last_crossover_alert_time = current_time
 
@@ -322,30 +322,30 @@ class EMA200TouchMonitor:
                 time_diff_minutes = (current_time - self._last_real_alert_time).total_seconds() / 60
                 if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
                     should_alert = True
-                    logger.info(f"Alert cooldown expired | time since last alert: {time_diff_minutes:.2f} minutes")
+                    logger.info(f"[_check_tick]: Alert cooldown expired | time since last alert: {time_diff_minutes:.2f} minutes")
                 else:
-                    logger.info(f"EMA200 touch ongoing | cooldown active | time since last alert: {time_diff_minutes:.2f} minutes | price: {current_price:.2f}")
+                    logger.info(f"[_check_tick]: EMA200 touch ongoing | cooldown active | time since last alert: {time_diff_minutes:.2f} minutes | price: {current_price:.2f}")
 
             if should_alert:
-                logger.info(f"*** ALERT TRIGGERED *** | EMA200 touch detected | price: {current_price:.2f} | EMA200: {ema_200:.2f}")
+                logger.info(f"[_check_tick]: *** ALERT TRIGGERED *** | EMA200 touch detected | price: {current_price:.2f} | EMA200: {ema_200:.2f}")
                 self._send_touch_alert(current_price, ema_200, distance)
                 self._last_real_alert_time = current_time
         else:
-            logger.info(f"Price outside touch buffer | distance: {distance:.2f} points")
+            logger.info(f"[_check_tick]: Price outside touch buffer | distance: {distance:.2f} points")
 
     # ========================
     # MAIN LOOP
     # ========================
     def run(self):
         logger.info(
-            f"EMA200 touch monitor started | symbol: {self.SYMBOL} | "
-            f"timeframe: M5 | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
+            f"[run]: EMA200 touch monitor started | symbol: {self.SYMBOL} | "
+            f"[run]: timeframe: M5 | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
         )
         while True:
             try:
                 self._check_tick()
             except Exception as e:
-                logger.exception(f"Error in monitor loop: {e}")
+                logger.exception(f"[run]: Error in monitor loop: {e}")
             time.sleep(self.POLL_INTERVAL)
 
 
@@ -470,10 +470,10 @@ if __name__ == "__main__":
         exit(1)
     try:
         prevent_sleep()  # Enable sleep prevention
-        logger.info("Starting BTC monitor with sleep prevention enabled")
+        logger.info("[BTC_main]: Starting BTC monitor with sleep prevention enabled")
         monitor.run()
         # monitor.backtest_24h()
     finally:
         allow_sleep()  # Restore normal sleep behavior
         mt5.shutdown()
-        logger.info("MT5 shutdown")
+        logger.info("[BTC_main]: MT5 shutdown")
