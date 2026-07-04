@@ -1,0 +1,379 @@
+'''
+                                        BTCUSD Strategy 4h.
+1. SL When 9 EMA crosses 15 EMA in against side of the trade.
+2. TP: 200 dollars
+3. Lot size: 0.1         --not confirmed
+4. Backtested from Jan 2026 year to may 2026, working  effectively.
+'''
+
+import time
+import MetaTrader5 as mt5
+import pandas as pd
+
+from Algo.common.common import _calculate_ema_mt5, prevent_sleep, allow_sleep
+from Algo.credentials import login, password, server
+from Algo.logger import logger
+from communication.send_email import send_email_price_alert
+from Algo.xauusd.services import has_open_position
+
+
+class BTCUSD_9_15_4H:
+    '''
+        btcusd 9-15 EMA Crossover Strategy on 4H timeframe.
+    '''
+
+    SYMBOL       = "BTCUSDz"
+    TIMEFRAME    = mt5.TIMEFRAME_H4
+    TOUCH_BUFFER = 2.0   
+    POLL_INTERVAL = 60     
+    NUM_CANDLES  = 500
+    ALERT_COOLDOWN_MINUTES = 4  
+    LOT_SIZE = 0.1  
+    SL_POINTS = 50.0  
+    TP_POINTS = 150.0  
+    SENTIMENT = "SELL"  #To be managed manually on basis of 1D chart. If 9 crosses 15 downward at 1D so sentiment will be SELL.                 
+
+    def __init__(self):
+        self._already_alerted = False
+        # self._last_alert_time = {}  # Tracks last alert time per symbol/event
+        self._last_real_alert_time = None  # Tracks last alert time for real-time monitoring
+        self._last_crossover_alert_time = None  
+        self._prev_ema9 = None  # Previous EMA9 value for crossover detection
+        self._prev_ema15 = None  
+
+    # ========================
+    # MT5 CONNECTION
+    # ========================
+    def connect(self) -> bool:
+        if not mt5.initialize():
+            logger.error(f"[connect]: MT5 init failed: {mt5.last_error()}")
+            return False
+        if not mt5.login(login, password, server):
+            logger.error(f"[connect]: MT5 login failed: {mt5.last_error()}")
+            return False
+        logger.info("[connect]: Connected to MT5 successfully")
+        return True
+
+    # ========================
+    # EMA 15 CALCULATION
+    # ========================
+    def _get_ema_15(self) -> float:
+        rates = mt5.copy_rates_from_pos(self.SYMBOL, self.TIMEFRAME, 0, self.NUM_CANDLES)
+        if rates is None or len(rates) < 200:
+            logger.error(f"[_get_ema_15]: Not enough candle data for EMA 15 | received: {len(rates) if rates is not None else 0}")
+            raise ValueError("Not enough candle data for EMA 15")
+        df = pd.DataFrame(rates)
+        ema = _calculate_ema_mt5(df, 15, "close") + 3        # adding 5 points to EMA15 to create a buffer zone for matching exact value
+        logger.debug(f"[_get_ema_15]: EMA15 calculated: {ema:.2f}")
+        return ema
+
+    # ========================
+    # EMA 9 CALCULATION
+    # ========================
+    def _get_ema_9(self) -> float:
+        rates = mt5.copy_rates_from_pos(self.SYMBOL, self.TIMEFRAME, 0, self.NUM_CANDLES)
+        if rates is None or len(rates) < 200:
+            logger.error(f"[_get_ema_9]: Not enough candle data for EMA 9 | received: {len(rates) if rates is not None else 0}")
+            raise ValueError("Not enough candle data for EMA 9")
+        df = pd.DataFrame(rates)
+        ema = _calculate_ema_mt5(df, 9, "close")
+        logger.debug(f"[_get_ema_9]: EMA9 calculated: {ema:.2f}")
+        return ema 
+
+    # ========================
+    # ALERT
+    # ========================
+    def _send_touch_alert(self, current_price: float, ema_15: float, distance: float):
+        msg = (
+            f"btcusd Price Touch Alert!\n\n"
+            f"Symbol: {self.SYMBOL}\n"
+            f"Current Price: {current_price:.2f}\n"
+            f"EMA 15 (M5): {ema_15:.2f}\n"
+            f"Distance: {distance:.2f} points"
+        )
+        logger.info(f"[send_touch_alert]: Sending touch alert email | price: {current_price:.2f} | EMA15: {ema_15:.2f} | distance: {distance:.2f}")
+        send_email_price_alert(msg)
+        logger.info(f"[send_touch_alert]: Email sent successfully. ")
+
+    # ========================
+    # ALERT
+    # ========================
+    def _send_crossover_alert(self, ema_9: float, ema_15: float, crossover_type: str):
+        msg = (
+            f"btcusd EMA Crossover Alert!\n\n"
+            f"Symbol: {self.SYMBOL}\n"
+            f"Crossover Type: {crossover_type}\n"
+            f"EMA 9 (M5): {ema_9:.2f}\n"
+            f"EMA 15 (M5): {ema_15:.2f}\n"
+        )
+        logger.info(f"[_send_crossover_alert]: Sending crossover alert email | type: {crossover_type} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f}")
+        send_email_price_alert(msg)
+        logger.info(f"[_send_crossover_alert]: Crossover email sent successfully | type: {crossover_type}")
+
+
+    def _send_trade_execution_alert(self, direction: str, execution_price: float, ema_9: float, ema_15: float, result):
+        """Send email notification when trade is executed"""
+        # Calculate SL and TP from execution price
+        sl_price = execution_price - self.SL_POINTS if direction == "BUY" else execution_price + self.SL_POINTS
+        tp_price = execution_price + self.TP_POINTS if direction == "BUY" else execution_price - self.TP_POINTS
+        
+        msg = (
+            f"btcusd Trade Executed!\n\n"
+            f"Symbol: {self.SYMBOL}\n"
+            f"Direction: {direction}\n"
+            f"Ticket: {result.order}\n"
+            f"Execution Price: {execution_price:.2f}\n"
+            f"Lot Size: {self.LOT_SIZE}\n"
+            f"Stop Loss: {sl_price:.2f} ({self.SL_POINTS} points)\n"
+            f"Take Profit: {tp_price:.2f} ({self.TP_POINTS} points)\n\n"
+            f"Crossover Details:\n"
+            f"EMA 9: {ema_9:.2f}\n"
+            f"EMA 15: {ema_15:.2f}\n"
+        )
+        logger.info(f"[_send_trade_execution_alert]: Sending trade execution email | {direction} | ticket: {result.order} | price: {execution_price:.2f}")
+        send_email_price_alert(msg)
+        logger.info(f"[_send_trade_execution_alert]: Trade execution email sent successfully | {direction} | ticket: {result.order}")
+
+    def _place_order(self, order_type):
+        """Place market order at whatever price is available - executes immediately"""
+        tick = mt5.symbol_info_tick(self.SYMBOL)
+        if tick is None:
+            logger.error(f"[_place_order]: Failed to get tick for {self.SYMBOL}")
+            return None
+        
+        # Get current market price - whatever is available
+        price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
+        direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
+        
+        # No SL/TP - execute at market price immediately
+        logger.info(f"[_place_order]: Placing {direction} order at market price | symbol: {self.SYMBOL} | lot: {self.LOT_SIZE} | price: {price:.2f}")
+        
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": self.SYMBOL,
+            "volume": self.LOT_SIZE,
+            "type": order_type,
+            "price": price,
+            "sl": 0.0,  # No SL - manual management
+            "tp": 0.0,  # No TP - manual management
+            "deviation": 100,  # Larger deviation to ensure execution at any available price
+            "magic": 10002,
+            "comment": "BTCUSD EMA9/15 crossover - Market execution",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        
+        result = mt5.order_send(request)
+        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            logger.error(f"[_place_order]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+            return None
+        
+        logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
+        return result
+
+
+    def _execute_crossover_trade(self, ema_9: float, ema_15: float, order_type):
+        """Execute trade on EMA9/15 crossover at market price"""
+        direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
+        
+        # Check if position already exists
+        if has_open_position(self.SYMBOL):
+            logger.info(f"[_execute_crossover_trade]: Crossover detected but skipping trade — open position already exists for {self.SYMBOL}")
+            return None
+        
+        # Get current market price
+        tick = mt5.symbol_info_tick(self.SYMBOL)
+        if tick is None:
+            logger.error(f"[_execute_crossover_trade]: Failed to get tick for {self.SYMBOL}")
+            return None
+        
+        current_price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
+        
+        logger.info(f"[_execute_crossover_trade]: Executing {direction} trade on crossover | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | current_price: {current_price:.2f}")
+        
+        if self.SENTIMENT != direction:
+            logger.warning(f"[_execute_crossover_trade]: Crossover detected but sentiment mismatch | expected: {self.SENTIMENT} | actual: {direction}")
+            return None
+
+        # Place order at market price
+        result = self._place_order(order_type)
+        
+        if result:
+            execution_price = result.price
+            logger.info(f"[_execute_crossover_trade]: Crossover trade executed successfully | {direction} | ticket: {result.order} | executed_price: {execution_price:.2f}")
+            # Send email notification
+            self._send_trade_execution_alert(direction, execution_price, ema_9, ema_15, result)
+        else:
+            logger.error(f"[_execute_crossover_trade]: Failed to execute crossover trade | {direction}")
+        
+        return result
+
+
+    # ========================
+    # SINGLE TICK CHECK
+    # ========================
+    def _check_tick(self):
+        from datetime import datetime, timezone
+        
+        tick = mt5.symbol_info_tick(self.SYMBOL)
+        if tick is None:
+            logger.warning(f"[_check_tick]: Failed to get tick for {self.SYMBOL}, retrying...")
+            return
+
+        current_price = tick.bid
+        ema_15        = self._get_ema_15()
+        ema_9         = self._get_ema_9()
+        distance      = abs(ema_9 - ema_15)
+        current_time  = datetime.now(timezone.utc)
+
+        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
+
+        # Check for EMA9/15 crossover
+        if self._prev_ema9 is not None and self._prev_ema15 is not None:
+            # Bullish crossover: EMA9 crosses above EMA15
+            if ema_9 > ema_15 and self._prev_ema9 <= self._prev_ema15:
+                should_trade = False
+                if self._last_crossover_alert_time is None:
+                    should_trade = True
+                else:
+                    time_diff_minutes = (current_time - self._last_crossover_alert_time).total_seconds() / 60
+                    if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
+                        should_trade = True
+                        logger.info(f"[_check_tick]: Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
+
+                if should_trade:
+                    logger.info(f"*** BULLISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed above EMA15: {ema_15:.2f}")
+                    self._execute_crossover_trade(ema_9, ema_15, mt5.ORDER_TYPE_BUY)
+                    self._last_crossover_alert_time = current_time
+
+            # Bearish crossover: EMA9 crosses below EMA15
+            elif ema_9 < ema_15 and self._prev_ema9 >= self._prev_ema15:
+                should_trade = False
+                if self._last_crossover_alert_time is None:
+                    should_trade = True
+                else:
+                    time_diff_minutes = (current_time - self._last_crossover_alert_time).total_seconds() / 60
+                    if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
+                        should_trade = True
+                        logger.info(f"Crossover cooldown expired | time since last trade: {time_diff_minutes:.2f} minutes")
+
+                if should_trade:
+                    logger.info(f"[_check_tick]: *** BEARISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed below EMA15: {ema_15:.2f}")
+                    self._execute_crossover_trade(ema_9, ema_15, mt5.ORDER_TYPE_SELL)
+                    self._last_crossover_alert_time = current_time
+
+        # Update previous EMA values for next iteration
+        self._prev_ema9 = ema_9
+        self._prev_ema15 = ema_15
+
+        # Check for price touching EMA15
+        if distance <= self.TOUCH_BUFFER:
+            # Check if we should trigger alert (5+ minutes since last alert)
+            should_alert = False
+            if self._last_real_alert_time is None:
+                should_alert = True
+            else:
+                time_diff_minutes = (current_time - self._last_real_alert_time).total_seconds() / 60
+                if time_diff_minutes >= self.ALERT_COOLDOWN_MINUTES:
+                    should_alert = True
+                    logger.info(f"[_check_tick]: Alert cooldown expired | time since last alert: {time_diff_minutes:.2f} minutes")
+                else:
+                    logger.info(f"EMA15 touch ongoing | cooldown active | time since last alert: {time_diff_minutes:.2f} minutes | price: {current_price:.2f}")
+
+            if should_alert:
+                logger.info(f"[_check_tick]: *** ALERT TRIGGERED *** | EMA15 touch detected | price: {current_price:.2f} | EMA15: {ema_15:.2f}")
+                self._send_touch_alert(current_price, ema_15, distance)
+                self._last_real_alert_time = current_time
+        else:
+            logger.info(f"[_check_tick][{self.SYMBOL}]: Price outside touch buffer | distance: {distance:.2f} points")
+
+
+    # ========================
+    # BACKTEST
+    # ========================
+    def backtest(self, start_date: str, end_date: str):
+        from datetime import datetime, timezone
+        import os
+
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end_dt   = datetime.strptime(end_date,   "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+        rates = mt5.copy_rates_range(self.SYMBOL, self.TIMEFRAME, start_dt, end_dt)
+        if rates is None or len(rates) < 15:
+            logger.error(f"[backtest]: Not enough data for range {start_date} to {end_date}")
+            return
+
+        df = pd.DataFrame(rates)
+        df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+
+        ema9_vals, ema15_vals, signals = [], [], []
+        prev_ema9, prev_ema15 = None, None
+
+        for i in range(len(df)):
+            if i < 15:
+                ema9_vals.append(None)
+                ema15_vals.append(None)
+                signals.append("")
+                continue
+
+            slice_df = df.iloc[:i + 1]
+            ema9  = _calculate_ema_mt5(slice_df, 9,  "close")
+            ema15 = _calculate_ema_mt5(slice_df, 15, "close")
+
+            signal = ""
+            if prev_ema9 is not None and prev_ema15 is not None:
+                if ema9 > ema15 and prev_ema9 <= prev_ema15:
+                    signal = "BUY"
+                elif ema9 < ema15 and prev_ema9 >= prev_ema15:
+                    signal = "SELL"
+
+            ema9_vals.append(round(ema9, 2))
+            ema15_vals.append(round(ema15, 2))
+            signals.append(signal)
+            prev_ema9, prev_ema15 = ema9, ema15
+
+        result_df = pd.DataFrame({
+            "Datetime": df["time"],
+            "EMA9":     ema9_vals,
+            "EMA15":    ema15_vals,
+            "Signal":   signals,
+        })
+
+        filename = f"btc_9_15_backtest_{start_date}_{end_date}.xlsx"
+        output_path = os.path.join(os.path.dirname(__file__), filename)
+        result_df.to_excel(output_path, index=False)
+        logger.info(f"[backtest]: Saved {output_path} | bars: {len(result_df)}")
+        return output_path
+
+    # ========================
+    # MAIN LOOP
+    # ========================
+    def run(self):
+        logger.info(
+            f"[run]: EMA200 touch monitor started | symbol: {self.SYMBOL} | "
+            f"[run]: timeframe: M5 | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
+        )
+        while True:
+            try:
+                self._check_tick()
+            except Exception as e:
+                logger.exception(f"[run]: Error in monitor loop: {e}")
+            time.sleep(self.POLL_INTERVAL)
+
+
+# ========================
+# ENTRY POINT
+# ========================
+if __name__ == "__main__":
+    monitor = BTCUSD_9_15_4H()
+    if not monitor.connect():
+        exit(1)
+    try:
+        prevent_sleep()  # Enable sleep prevention
+        logger.info("Starting btcusd monitor with sleep prevention enabled")
+        # monitor.run()
+        monitor.backtest("2024-01-01", "2024-06-01")
+    finally:
+        allow_sleep()  # Restore normal sleep behavior
+        mt5.shutdown()
+        logger.info("[btc_200_touch]: MT5 shutdown")
