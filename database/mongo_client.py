@@ -4,15 +4,15 @@ from datetime import datetime
 
 
 # Status: Working properly.
-def push_mongo(doc=None):
+def push(doc=None,collection_name= None):
 # Connect to the local MongoDB server
     client = MongoClient('mongodb://localhost:27017/')
 
     # Choose database (will create if it doesn't exist)
-    db = client['Scrapper']
+    db = client['Money_Manage']
 
     # Choose collection (similar to a table in SQL)
-    collection = db['email_logs']
+    collection = db[collection_name]
 
     # Insert a document
     # doc = {"name": "Alice", "age": 25}
@@ -25,16 +25,16 @@ def push_mongo(doc=None):
 
 
 # Status: Working properly.
-def fetch_last():
+def fetch_last(query=None, collection_name= None):
     # Return latest created object.
     client = MongoClient('mongodb://localhost:27017/')
 
     # Choose database (will create if it doesn't exist)
-    db = client['Scrapper']
+    db = client['Money_Manage']
 
     # Choose collection (similar to a table in SQL)
-    collection = db['email_logs']
-    insert_result = collection.find().sort({"created_at":-1})
+    collection = db[collection_name]
+    insert_result = collection.find(query).sort({"created_at":-1})
     return list(insert_result)
 
 
@@ -47,7 +47,7 @@ def push_many(doc=None,collection='week_data'):
     client = MongoClient('mongodb://localhost:27017/')
 
     # Choose database (will create if it doesn't exist)
-    db = client['Scrapper']
+    db = client['Money_Manage']
 
     db_collection = db[collection]
 
@@ -56,14 +56,14 @@ def push_many(doc=None,collection='week_data'):
 
 
 # Status: Working properly.
-def delete_data_mongo(doc=None, collection='week_data'):
+def delete(doc=None, collection='week_data'):
     """
     Deletes many documents from MongoDB.
     """
     # Connect to the local MongoDB server
     client = MongoClient('mongodb://localhost:27017/')
     # Choose database (will create if it doesn't exist)
-    db = client['Scrapper']
+    db = client['Money_Manage']
 
     db_collection = db[collection]
 

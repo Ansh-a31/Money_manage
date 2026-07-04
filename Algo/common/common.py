@@ -108,3 +108,13 @@ def calculate_ema_60_mt5(df: pd.DataFrame, close_col: str = "close") -> float:
 def calculate_ema_200_mt5(df: pd.DataFrame, close_col: str = "close") -> float:
     return _calculate_ema_mt5(df, 200, close_col)
 
+
+def has_open_position(symbol):
+    positions = mt5.positions_get(symbol=symbol)
+    if positions is None:
+        logger.warning(f"[has_open_position]:Failed to fetch positions for {symbol}")
+        return False
+    if len(positions) > 0:
+        logger.info(f"[has_open_position]:Open position exists for {symbol} | total: {len(positions)}")
+        return True
+    return False
