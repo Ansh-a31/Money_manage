@@ -306,43 +306,28 @@ class BTCUSD_9_15_4H:
         df = pd.DataFrame(rates)
         df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
 
-        ema9_vals, ema15_vals, signals = [], [], []
+        rows = []
         prev_ema9, prev_ema15 = None, None
 
-        for i in range(len(df)):
-            if i < 15:
-                ema9_vals.append(None)
-                ema15_vals.append(None)
-                signals.append("")
-                continue
-
+        for i in range(15, len(df)):
             slice_df = df.iloc[:i + 1]
             ema9  = _calculate_ema_mt5(slice_df, 9,  "close")
             ema15 = _calculate_ema_mt5(slice_df, 15, "close")
 
-            signal = ""
             if prev_ema9 is not None and prev_ema15 is not None:
                 if ema9 > ema15 and prev_ema9 <= prev_ema15:
-                    signal = "BUY"
+                    rows.append({"Datetime": df.iloc[i]["time"], "EMA9": round(ema9, 2), "EMA15": round(ema15, 2), "Signal": "BUY"})
                 elif ema9 < ema15 and prev_ema9 >= prev_ema15:
-                    signal = "SELL"
+                    rows.append({"Datetime": df.iloc[i]["time"], "EMA9": round(ema9, 2), "EMA15": round(ema15, 2), "Signal": "SELL"})
 
-            ema9_vals.append(round(ema9, 2))
-            ema15_vals.append(round(ema15, 2))
-            signals.append(signal)
             prev_ema9, prev_ema15 = ema9, ema15
 
-        result_df = pd.DataFrame({
-            "Datetime": df["time"],
-            "EMA9":     ema9_vals,
-            "EMA15":    ema15_vals,
-            "Signal":   signals,
-        })
+        result_df = pd.DataFrame(rows, columns=["Datetime", "EMA9", "EMA15", "Signal"])
 
-        filename = f"btc_9_15_backtest_{start_date}_{end_date}.xlsx"
+        filename = f"btc_9_15_backtest_{start_date}_{end_date}.csv"
         output_path = os.path.join(os.path.dirname(__file__), filename)
-        result_df.to_excel(output_path, index=False)
-        logger.info(f"[backtest]: Saved {output_path} | bars: {len(result_df)}")
+        result_df.to_csv(output_path, index=False)
+        logger.info(f"[backtest]: Saved {output_path} | crossover signals: {len(result_df)}")
         return output_path
 
     # ========================
@@ -371,8 +356,8 @@ if __name__ == "__main__":
     try:
         prevent_sleep()  # Enable sleep prevention
         logger.info("Starting btcusd monitor with sleep prevention enabled")
-        # monitor.run()
-        monitor.backtest("2024-01-01", "2024-06-01")
+        monitor.run()
+        # monitor.backtest("2026-01-01", "2026-07-01")
     finally:
         allow_sleep()  # Restore normal sleep behavior
         mt5.shutdown()
