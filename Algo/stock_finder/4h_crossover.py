@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime, timezone
+import pytz
 import MetaTrader5 as mt5
 from Algo.logger import logger
 from Algo.credentials import login, password, server
@@ -8,15 +9,15 @@ import time
 import ipdb
 import pandas as pd
 from database import mongo_client
+from communication.send_email import send_email_price_alert
 
 class stock_tracker_4H():
     def __init__(self):
         self.TIMEFRAME = mt5.TIMEFRAME_H4
         self.NUM_CANDLES = 500
         self.LOT_SIZE = 0.1
-        self._prev_ema9 = None  # Previous EMA9 value for crossover detection
-        self._prev_ema15 = None  
-        self.POLL_INTERVAL = 10 # seconds
+
+        # self.POLL_INTERVAL = 10 # seconds
 
     def connect(self) -> bool: 
         if not mt5.initialize():
@@ -57,48 +58,73 @@ class stock_tracker_4H():
         # df.to_csv("Algo/stock_finder/exness_symbols.csv", index=False)
         return sym
 
-        
-    def movers_1D(self, data:list, timeframe: Optional[str] = None, ):
-        '''
-        Function to calculate the fast and slow movers in 24 hours.
-        ''' 
-        # ipdb.set_trace()
-        movers = []
-        count = 0
-        for symbol in data:
-            symbol_name = symbol['symbol_name']
-            count+=1
-            # if symbol != "USDHRKz":
-            #     continue
-            logger.info(f"[calculate_top_movers]:{count} Processing symbol: {symbol_name}")
-            rates = mt5.copy_rates_from_pos(symbol_name, self.TIMEFRAME, 0, 2)
-
-            if rates is None:
-                logger.warning(f"[calculate_top_movers]: Failed to get rates for {symbol_name}")
-                continue
-
-            current_data = rates[-1]   # Latest daily candle
-            current = current_data.item()[4]    #current closed price
-            previous_data = rates[-2]  # Previous daily candle
-            previous = previous_data.item()[4]  # previous close price 
-
-            movers.append({
-            "symbol": symbol_name,
-            "category": symbol['category'],
-            "current": current,
-            "previous": previous,
-            "change_pct": ((current - previous) / previous) * 100
-            })
-
-        ipdb.set_trace()
-        top_movers = sorted(movers, key=lambda x: x["change_pct"], reverse=True)
-        slow_movers = sorted(movers, key=lambda x: x["change_pct"], reverse=False)
-
-        return {
-            "top_movers": top_movers[:5],
-            "slow_movers": slow_movers[:5]
-        }
     
+    # def movers_1D(self, data:list, timeframe: Optional[str] = None, ):
+    #     '''
+    #     Function to calculate the fast and slow movers in 24 hours.
+    #     ''' 
+    #     # ipdb.set_trace()
+    #     movers = []
+    #     count = 0
+    #     for symbol in data:
+    #         symbol_name = symbol['symbol_name']
+    #         count+=1
+    #         # if symbol != "USDHRKz":
+    #         #     continue
+    #         logger.info(f"[calculate_top_movers]:{count} Processing symbol: {symbol_name}")
+    #         rates = mt5.copy_rates_from_pos(symbol_name, self.TIMEFRAME, 0, 2)
+
+    #         if rates is None:
+    #             logger.warning(f"[calculate_top_movers]: Failed to get rates for {symbol_name}")
+    #             continue
+
+    #         current_data = rates[-1]   # Latest daily candle
+    #         current = current_data.item()[4]    #current closed price
+    #         previous_data = rates[-2]  # Previous daily candle
+    #         previous = previous_data.item()[4]  # previous close price 
+
+    #         movers.append({
+    #         "symbol": symbol_name,
+    #         "category": symbol['category'],
+    #         "current": current,
+    #         "previous": previous,
+    #         "change_pct": ((current - previous) / previous) * 100
+    #         })
+
+    #     ipdb.set_trace()
+    #     top_movers = sorted(movers, key=lambda x: x["change_pct"], reverse=True)
+    #     slow_movers = sorted(movers, key=lambda x: x["change_pct"], reverse=False)
+
+    #     return {
+    #         "top_movers": top_movers[:5],
+    #         "slow_movers": slow_movers[:5]
+    #     }
+    
+    
+    def _send_trade_execution_alert(self, direction: str, execution_price: float, ema_9: float, ema_15: float, result):
+        """Send email notification when trade is executed"""
+        # Calculate SL and TP from execution price
+        sl_price = execution_price - self.SL_POINTS if direction == "BUY" else execution_price + self.SL_POINTS
+        tp_price = execution_price + self.TP_POINTS if direction == "BUY" else execution_price - self.TP_POINTS
+        
+        msg = (
+            f"btcusd Trade Executed!\n\n"
+            f"Symbol: {self.SYMBOL}\n"
+            f"Direction: {direction}\n"
+            f"Ticket: {result.order}\n"
+            f"Execution Price: {execution_price:.2f}\n"
+            f"Lot Size: {self.LOT_SIZE}\n"
+            f"Stop Loss: {sl_price:.2f} ({self.SL_POINTS} points)\n"
+            f"Take Profit: {tp_price:.2f} ({self.TP_POINTS} points)\n\n"
+            f"Crossover Details:\n"
+            f"EMA 9: {ema_9:.2f}\n"
+            f"EMA 15: {ema_15:.2f}\n"
+        )
+        logger.info(f"[_send_trade_execution_alert]: Sending trade execution email | {direction} | ticket: {result.order} | price: {execution_price:.2f}")
+        send_email_price_alert(msg)
+        logger.info(f"[_send_trade_execution_alert]: Trade execution email sent successfully | {direction} | ticket: {result.order}")
+
+
     # ========================
     # EMA 15 CALCULATION
     # ========================    
@@ -106,7 +132,6 @@ class stock_tracker_4H():
         rates = mt5.copy_rates_from_pos(symbol, self.TIMEFRAME, 0, 100)
         if rates is None or len(rates) < 50:
             logger.error(f"[_get_ema_15]: Not enough candle data for EMA 15 | received: {len(rates) if rates is not None else 0}")
-            raise ValueError("Not enough candle data for EMA 15")
         df = pd.DataFrame(rates)
         ema = _calculate_ema_mt5(df, 15, "close") + 3        # adding 5 points to EMA15 to create a buffer zone for matching exact value
         logger.debug(f"[_get_ema_15]: EMA15 calculated: {ema:.2f}")
@@ -205,11 +230,7 @@ class stock_tracker_4H():
     # ========================
     # PRICE TRACKER
     # ========================
-    def _track_price(self,symbol):
-        '''
-        
-        '''
-        
+    def _track_price(self, symbol):
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
             logger.warning(f"[_track_price]: Failed to get tick for {symbol}, retrying...")
@@ -219,29 +240,36 @@ class stock_tracker_4H():
         ema_15        = self._get_ema_15(symbol)
         ema_9         = self._get_ema_9(symbol)
         distance      = abs(ema_9 - ema_15)
-        current_time  = datetime.now(timezone.utc)
-        
-        # ipdb.set_trace()
+        current_time  = datetime.now(pytz.timezone("Asia/Kolkata"))
+
         logger.info(f"[_track_price]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | Distance: {distance:.2f}")
+
         previous_stock_data = mongo_client.fetch_last(query={"symbol": symbol}, collection_name="previous_ema_value")
+
         if previous_stock_data:
-            self._prev_ema15 = previous_stock_data[0].get("ema15")
-            self._prev_ema9  = previous_stock_data[0].get("ema9")
+            prev_ema9  = previous_stock_data[0].get("ema9")
+            prev_ema15 = previous_stock_data[0].get("ema15")
 
-        if self._prev_ema9 is not None and self._prev_ema15 is not None:
-            # Bullish crossover: EMA9 crosses above EMA15
-            if ema_9 > ema_15 and self._prev_ema9 <= self._prev_ema15:
-                ipdb.set_trace()
-                logger.info(f"[_track_price]: *** BULLISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed above EMA15: {ema_15:.2f}")
-                self._execute_crossover_trade(symbol, ema_9, ema_15, mt5.ORDER_TYPE_BUY)
+            if prev_ema9 is not None and prev_ema15 is not None:
+                if ema_9 > ema_15 and prev_ema9 <= prev_ema15:
+                    logger.info(f"[_track_price]: *** BULLISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed above EMA15: {ema_15:.2f}")
+                    mongo_client.push(doc={"symbol": symbol, "ema9": ema_9, "ema15": ema_15, "direction": "BUY", "created_at": current_time}, collection_name="crossover_detected")
+                    self._execute_crossover_trade(symbol, ema_9, ema_15, mt5.ORDER_TYPE_BUY)
 
-            elif ema_9 < ema_15 and self._prev_ema9 >= self._prev_ema15:
-                ipdb.set_trace()
-                logger.info(f"[_track_price]: *** BEARISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed below EMA15: {ema_15:.2f}")
-                self._execute_crossover_trade(symbol, ema_9, ema_15, mt5.ORDER_TYPE_SELL)
+                elif ema_9 < ema_15 and prev_ema9 >= prev_ema15:
+                    logger.info(f"[_track_price]: *** BEARISH CROSSOVER DETECTED *** | EMA9: {ema_9:.2f} crossed below EMA15: {ema_15:.2f}")
+                    mongo_client.push(doc={"symbol": symbol, "ema9": ema_9, "ema15": ema_15, "direction": "SELL", "created_at": current_time}, collection_name="crossover_detected")
+                    self._execute_crossover_trade(symbol, ema_9, ema_15, mt5.ORDER_TYPE_SELL)
+
+            mongo_client.update(
+                query={"symbol": symbol},
+                update_doc={"ema9": ema_9, "ema15": ema_15, "timestamp": current_time},
+                collection_name="previous_ema_value"
+            )
+            logger.debug(f"[_track_price]: Updated EMA values for {symbol} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f}")
 
         else:
-            logger.debug(f"[_track_price]: Previous EMA values not set for: {symbol}.")
+            logger.debug(f"[_track_price]: No previous EMA data found for {symbol}, inserting...")
             mongo_client.push(doc={"symbol": symbol, "ema9": ema_9, "ema15": ema_15, "timestamp": current_time}, collection_name="previous_ema_value")
 
 
@@ -254,21 +282,24 @@ class stock_tracker_4H():
             f"[run]: stock_4H touch monitor started | for timeframe: {self.TIMEFRAME}. "
         )
         while True:
-            try:
-                current_time  = datetime.now(timezone.utc)
+            
+                count = 0
                 stock_data = self.get_stocks()
                 for symbol in stock_data:
-                    logger.info(f"{symbol['symbol_name']}----------------------------Started----------------------------------")
-                    logger.info(f"[run]: Processing symbol: {symbol['symbol_name']} datetime: {current_time}")
-                    symbol_name = symbol['symbol_name']
-                    self._track_price(symbol_name)
-                    time.sleep(2)    
-                    logger.info(f"{symbol['symbol_name']}-----------------------------Ended---------------------------------")
-                time.sleep(self.POLL_INTERVAL)
-            except Exception as e:
-                logger.exception(f"[run]: Error in monitor loop: {e}")
-            time.sleep(self.POLL_INTERVAL)
-
+                    try:
+                        count += 1
+                        logger.info(f"{count}. {symbol['symbol_name']}----------------------------Started----------------------------------")
+                        logger.info(f"[run]: Processing symbol: {symbol['symbol_name']} datetime: {datetime.now(pytz.timezone("Asia/Kolkata"))}")
+                        symbol_name = symbol['symbol_name']
+                        self._track_price(symbol_name)
+                        time.sleep(2)    
+                        logger.info(f"{symbol['symbol_name']}-----------------------------Ended---------------------------------")
+                    except Exception as e:
+                        logger.exception(f"[run]: Error in monitor loop: {e}")
+                        logger.exception(f"[run]: Continuing to next symbol after error...")
+                        continue
+                time.sleep(300)
+                logger.info(f"[run]: ----------------------------All symbols processed at {datetime.now(pytz.timezone("Asia/Kolkata"))}----------------------------------")
 
 
 if __name__ == "__main__":
