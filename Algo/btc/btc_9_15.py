@@ -158,7 +158,7 @@ class BTCUSD_9_15_4H:
             "tp": 0.0,  # No TP - manual management
             "deviation": 100,  # Larger deviation to ensure execution at any available price
             "magic": 10002,
-            "comment": "BTCUSD EMA9/15 crossover - Market execution",
+            "comment": "Order execute",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
