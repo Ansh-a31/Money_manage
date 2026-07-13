@@ -225,8 +225,9 @@ class BTCUSD_9_15_4H:
         ema_9         = self._get_ema_9()
         distance      = abs(ema_9 - ema_15)
         current_time  = datetime.now(timezone.utc)
+        spread        = round(((ema_9 / ema_15) - 1) * 100, 4)
 
-        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
+        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | spread: {spread} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
 
         # Check for EMA9/15 crossover
         if self._prev_ema9 is not None and self._prev_ema15 is not None:
@@ -335,8 +336,8 @@ class BTCUSD_9_15_4H:
     # ========================
     def run(self):
         logger.info(
-            f"[run]: EMA200 touch monitor started | symbol: {self.SYMBOL} | "
-            f"[run]: timeframe: M5 | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
+            f"[run]: EMA200 touch monitor started | symbol: {self.SYMBOL}.\n"
+            f"[run]: timeframe: {self.TIMEFRAME} | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
         )
         while True:
             try:
