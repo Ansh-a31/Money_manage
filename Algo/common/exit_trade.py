@@ -34,5 +34,7 @@ def close_all_positions(symbol: str):
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(f"[close_all_positions]: Failed to close ticket {pos.ticket} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+            return False
         else:
             logger.info(f"[close_all_positions]: Closed ticket {pos.ticket} | price: {price:.2f}")
+            return True

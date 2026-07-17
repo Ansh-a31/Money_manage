@@ -9,13 +9,16 @@
 import time
 import MetaTrader5 as mt5
 import pandas as pd
+from datetime import datetime
+import pytz
 
 from Algo.common.common import _calculate_ema_mt5, prevent_sleep, allow_sleep
 from Algo.credentials import login, password, server
 from Algo.logger import logger
 from communication.send_email import send_email_price_alert
 from Algo.xauusd.services import has_open_position
-
+from database import mongo_client
+from common import execute_trade,exit_trade
 
 class BTCUSD_9_15_4H:
     '''
@@ -31,7 +34,7 @@ class BTCUSD_9_15_4H:
     LOT_SIZE = 0.1  
     SL_POINTS = 50.0  
     TP_POINTS = 150.0  
-    SENTIMENT = "SELL"  #To be managed manually on basis of 1D chart. If 9 crosses 15 downward at 1D so sentiment will be SELL.                 
+    SENTIMENT = "BUY"  #To be managed manually on basis of 1D chart. If 9 crosses 15 downward at 1D so sentiment will be SELL.                 
 
     def __init__(self):
         self._already_alerted = False
@@ -167,7 +170,8 @@ class BTCUSD_9_15_4H:
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(f"[_place_order]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
             return None
-        
+        reason = f"Crossover at 4h trade executed. Direction: {direction}"
+        mongo_client.push(doc={"symbol": self.SYMBOL, "reason": reason, "created_at": datetime.now(pytz.timezone("Asia/Kolkata"))}, collection_name="instant_trade")
         logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
         return result
 
@@ -178,8 +182,10 @@ class BTCUSD_9_15_4H:
         
         # Check if position already exists
         if has_open_position(self.SYMBOL):
-            logger.info(f"[_execute_crossover_trade]: Crossover detected but skipping trade — open position already exists for {self.SYMBOL}")
-            return None
+            if exit_trade.close_all_positions(self.SYMBOL):
+                logger.info(f"[_execute_crossover_trade]: Crossover detected closing previous trade.")
+            else:
+                return None
         
         # Get current market price
         tick = mt5.symbol_info_tick(self.SYMBOL)

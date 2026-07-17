@@ -49,7 +49,7 @@ def _execute_instant__order(order_type,symbol,LOT_SIZE=0.1,reason=""):
     if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
         logger.error(f"[_place_order: {symbol}]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
         return None
-    mongo_client.push(doc={"symbol": symbol, "reason":reason, "created_at": datetime.now(pytz.timezone("Asia/Kolkata"))}, collection_name="instant_trade")
+    mongo_client.push(doc={"symbol": symbol, "reason":reason,"result":None, "created_at": datetime.now(pytz.timezone("Asia/Kolkata"))}, collection_name="instant_trade")
     logger.info(f"[_place_order: {symbol}]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
     return result
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
             order_type = mt5.ORDER_TYPE_BUY,
             symbol = "BTCUSDz",
             LOT_SIZE = 0.5,
-            reason = "Experimenting: Crossover and retest at 1D on 06/07/2026."
+            reason = "Experimenting: Buy sentiment at 1D and also 4H showing upward moment"
             )
         # monitor.backtest_24h()
     finally:
