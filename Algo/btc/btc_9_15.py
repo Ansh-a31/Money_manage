@@ -31,7 +31,7 @@ class BTCUSD_9_15_4H:
     POLL_INTERVAL = 60     
     NUM_CANDLES  = 500
     ALERT_COOLDOWN_MINUTES = 4  
-    LOT_SIZE = 0.1  
+    LOT_SIZE = 0.2  
     SL_POINTS = 50.0  
     TP_POINTS = 150.0  
     SENTIMENT = "BUY"  #To be managed manually on basis of 1D chart. If 9 crosses 15 downward at 1D so sentiment will be SELL.                 
@@ -171,7 +171,7 @@ class BTCUSD_9_15_4H:
             logger.error(f"[_place_order]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
             return None
         reason = f"Crossover at 4h trade executed. Direction: {direction}"
-        mongo_client.push(doc={"symbol": self.SYMBOL, "reason": reason, "created_at": datetime.now(pytz.timezone("Asia/Kolkata"))}, collection_name="instant_trade")
+        mongo_client.push(doc={"symbol": self.SYMBOL, "reason": reason,"result":None ,"created_at": datetime.now(pytz.timezone("Asia/Kolkata"))}, collection_name="instant_trade")
         logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
         return result
 
@@ -181,11 +181,13 @@ class BTCUSD_9_15_4H:
         direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
         
         # Check if position already exists
-        if has_open_position(self.SYMBOL):
-            if exit_trade.close_all_positions(self.SYMBOL):
-                logger.info(f"[_execute_crossover_trade]: Crossover detected closing previous trade.")
-            else:
+        positions = mt5.positions_get(symbol=self.SYMBOL)
+        if positions:
+            if any(pos.type == order_type for pos in positions):
+                logger.info(f"[_execute_crossover_trade]: Open {direction} position already exists, skipping.")
                 return None
+            exit_trade.close_all_positions(self.SYMBOL)
+            logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
         
         # Get current market price
         tick = mt5.symbol_info_tick(self.SYMBOL)
