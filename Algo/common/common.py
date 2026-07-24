@@ -73,6 +73,7 @@ def get_symbols_containing_specific_word(word: str) -> list:
 # ========================
 # MT5/EXNESS EMA CALCULATION
 # ========================
+# NOTE: This function only works well with higher timeframe only.
 def _calculate_ema_mt5(df: pd.DataFrame, period: int, close_col: str = "close") -> float:
     """
     Replicates MT5/Exness EMA exactly:

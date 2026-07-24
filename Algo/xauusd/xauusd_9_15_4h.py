@@ -19,7 +19,7 @@ from communication.send_email import send_email_price_alert
 from Algo.xauusd.services import has_open_position
 from database import mongo_client
 from common import execute_trade,exit_trade
-
+import ipdb
 class XAUUSD_9_15_5M_sentiment_1H:
     '''
         XAUUSD 9-15 EMA Crossover Strategy on 4H timeframe.
@@ -357,19 +357,19 @@ class XAUUSD_9_15_5M_sentiment_1H:
             time.sleep(self.POLL_INTERVAL)
 
 
-# ========================
-# ENTRY POINT
-# ========================
-if __name__ == "__main__":
-    monitor = XAUUSD_9_15_5M_sentiment_1H()
-    if not monitor.connect():
-        exit(1)
-    try:
-        prevent_sleep()  # Enable sleep prevention
-        logger.info("Starting XAUUSD monitor with sleep prevention enabled")
-        monitor.run()
-        # monitor.backtest("2026-01-01", "2026-07-01")
-    finally:
-        allow_sleep()  # Restore normal sleep behavior
-        mt5.shutdown()
-        logger.info("[XAUUSD_9_15_5M_sentiment_1H]: MT5 shutdown")
+# # ========================
+# # ENTRY POINT
+# # ========================
+# if __name__ == "__main__":
+#     monitor = XAUUSD_9_15_5M_sentiment_1H()
+#     if not monitor.connect():
+#         exit(1)
+#     try:
+#         prevent_sleep()  # Enable sleep prevention
+#         logger.info("Starting XAUUSD monitor with sleep prevention enabled")
+#         # monitor.run()
+#         monitor.backtest("2026-07-19", "2026-07-20")
+#     finally:
+#         allow_sleep()  # Restore normal sleep behavior
+#         mt5.shutdown()
+#         logger.info("[XAUUSD_9_15_5M_sentiment_1H]: MT5 shutdown")

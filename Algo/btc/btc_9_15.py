@@ -355,19 +355,19 @@ class BTCUSD_9_15_4H:
             time.sleep(self.POLL_INTERVAL)
 
 
-# ========================
-# ENTRY POINT
-# ========================
-if __name__ == "__main__":
-    monitor = BTCUSD_9_15_4H()
-    if not monitor.connect():
-        exit(1)
-    try:
-        prevent_sleep()  # Enable sleep prevention
-        logger.info("Starting btcusd monitor with sleep prevention enabled")
-        monitor.run()
-        # monitor.backtest("2026-01-01", "2026-07-01")
-    finally:
-        allow_sleep()  # Restore normal sleep behavior
-        mt5.shutdown()
-        logger.info("[btc_200_touch]: MT5 shutdown")
+# # ========================
+# # ENTRY POINT
+# # ========================
+# if __name__ == "__main__":
+#     monitor = BTCUSD_9_15_4H()
+#     if not monitor.connect():
+#         exit(1)
+#     try:
+#         prevent_sleep()  # Enable sleep prevention
+#         logger.info("Starting btcusd monitor with sleep prevention enabled")
+#         monitor.run()
+#         # monitor.backtest("2026-01-01", "2026-07-01")
+#     finally:
+#         allow_sleep()  # Restore normal sleep behavior
+#         mt5.shutdown()
+#         logger.info("[btc_200_touch]: MT5 shutdown")
