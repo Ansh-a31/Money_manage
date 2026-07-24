@@ -1,5 +1,5 @@
 '''
-                                        XAUUSD Strategy 4h.
+                                        BTCUSD Strategy 4h.
 1. SL When 9 EMA crosses 15 EMA in against side of the trade.
 2. TP: 200 dollars
 3. Lot size: 0.1         --not confirmed
@@ -9,28 +9,32 @@
 import time
 import MetaTrader5 as mt5
 import pandas as pd
+from datetime import datetime
+import pytz
 
 from Algo.common.common import _calculate_ema_mt5, prevent_sleep, allow_sleep
 from Algo.credentials import login, password, server
 from Algo.logger import logger
 from communication.send_email import send_email_price_alert
 from Algo.xauusd.services import has_open_position
+from database import mongo_client
+from common import execute_trade,exit_trade
 
-
-class XAUUSD_9_15_4H:
+class XAUUSD_9_15_5M_sentiment_1H:
     '''
         XAUUSD 9-15 EMA Crossover Strategy on 4H timeframe.
     '''
 
     SYMBOL       = "XAUUSDz"
-    TIMEFRAME    = mt5.TIMEFRAME_H4
+    TIMEFRAME    = mt5.TIMEFRAME_M15
     TOUCH_BUFFER = 2.0   
     POLL_INTERVAL = 60     
     NUM_CANDLES  = 500
     ALERT_COOLDOWN_MINUTES = 4  
-    LOT_SIZE = 0.1  
+    LOT_SIZE = 0.2  
     SL_POINTS = 50.0  
     TP_POINTS = 150.0  
+    SENTIMENT = "BUY"  #To be managed manually on basis of 1D chart. If 9 crosses 15 downward at 1D so sentiment will be SELL.                 
 
     def __init__(self):
         self._already_alerted = False
@@ -133,25 +137,19 @@ class XAUUSD_9_15_4H:
         send_email_price_alert(msg)
         logger.info(f"[_send_trade_execution_alert]: Trade execution email sent successfully | {direction} | ticket: {result.order}")
 
-    def _place_order(self, order_type, execution_price):
-        """Place market order with SL and TP set"""
+    def _place_order(self, order_type):
+        """Place market order at whatever price is available - executes immediately"""
         tick = mt5.symbol_info_tick(self.SYMBOL)
         if tick is None:
             logger.error(f"[_place_order]: Failed to get tick for {self.SYMBOL}")
             return None
         
+        # Get current market price - whatever is available
         price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
         direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
         
-        # Calculate SL and TP from execution price
-        if order_type == mt5.ORDER_TYPE_BUY:
-            sl = execution_price - self.SL_POINTS
-            tp = execution_price + self.TP_POINTS
-        else:
-            sl = execution_price + self.SL_POINTS
-            tp = execution_price - self.TP_POINTS
-        
-        logger.info(f"[_place_order]: Placing {direction} order | symbol: {self.SYMBOL} | lot: {self.LOT_SIZE} | price: {price} | SL: {sl:.2f} | TP: {tp:.2f}")
+        # No SL/TP - execute at market price immediately
+        logger.info(f"[_place_order]: Placing {direction} order at market price | symbol: {self.SYMBOL} | lot: {self.LOT_SIZE} | price: {price:.2f}")
         
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -159,11 +157,11 @@ class XAUUSD_9_15_4H:
             "volume": self.LOT_SIZE,
             "type": order_type,
             "price": price,
-            "sl": sl,
-            "tp": tp,
-            "deviation": 50,
+            "sl": 0.0,  # No SL - manual management
+            "tp": 0.0,  # No TP - manual management
+            "deviation": 100,  # Larger deviation to ensure execution at any available price
             "magic": 10002,
-            "comment": "XAUUSD EMA9/15 crossover - SL 50 TP 120",
+            "comment": "Order execute",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
@@ -172,19 +170,24 @@ class XAUUSD_9_15_4H:
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(f"[_place_order]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
             return None
-        
-        logger.info(f"[_place_order]: Order placed successfully | {direction} | ticket: {result.order} | price: {price} | SL: {sl:.2f} | TP: {tp:.2f}")
+        reason = f"Crossover at 4h trade executed. Direction: {direction}"
+        mongo_client.push(doc={"symbol": self.SYMBOL, "reason": reason,"result":None ,"created_at": datetime.now(pytz.timezone("Asia/Kolkata"))}, collection_name="instant_trade")
+        logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
         return result
 
 
     def _execute_crossover_trade(self, ema_9: float, ema_15: float, order_type):
-        """Execute trade on EMA9/15 crossover with 50 pip SL and 120 pip TP"""
+        """Execute trade on EMA9/15 crossover at market price"""
         direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
         
         # Check if position already exists
-        if has_open_position(self.SYMBOL):
-            logger.info(f"[_execute_crossover_trade]: Crossover detected but skipping trade — open position already exists for {self.SYMBOL}")
-            return None
+        positions = mt5.positions_get(symbol=self.SYMBOL)
+        if positions:
+            if any(pos.type == order_type for pos in positions):
+                logger.info(f"[_execute_crossover_trade]: Open {direction} position already exists, skipping.")
+                return None
+            exit_trade.close_all_positions(self.SYMBOL)
+            logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
         
         # Get current market price
         tick = mt5.symbol_info_tick(self.SYMBOL)
@@ -193,26 +196,19 @@ class XAUUSD_9_15_4H:
             return None
         
         current_price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
-        crossover_price = ema_9
         
-        # Check if current price matches crossover price (with small tolerance)
-        price_tolerance = 10.0  # points tolerance
-        price_diff = abs(current_price - crossover_price)
+        logger.info(f"[_execute_crossover_trade]: Executing {direction} trade on crossover | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | current_price: {current_price:.2f}")
         
-        if price_diff <= price_tolerance:
-            logger.info(f"[_execute_crossover_trade]: Current price {current_price:.2f} matches crossover price {crossover_price:.2f} (diff: {price_diff:.2f} points)")
-            execution_price = current_price
-        else:
-            logger.warning(f"[_execute_crossover_trade]: Current price {current_price:.2f} differs from crossover price {crossover_price:.2f} (diff: {price_diff:.2f} points) — executing at current price")
-            execution_price = current_price
-        
-        logger.info(f"[_execute_crossover_trade]: Executing {direction} trade on crossover | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | execution_price: {execution_price:.2f} | SL: {self.SL_POINTS} points | TP: {self.TP_POINTS} points")
-        
-        # Place order with SL and TP
-        result = self._place_order(order_type, execution_price)
+        if self.SENTIMENT != direction:
+            logger.warning(f"[_execute_crossover_trade]: Crossover detected but sentiment mismatch | expected: {self.SENTIMENT} | actual: {direction}")
+            return None
+
+        # Place order at market price
+        result = self._place_order(order_type)
         
         if result:
-            logger.info(f"[_execute_crossover_trade]: Crossover trade executed successfully | {direction} | ticket: {result.order}")
+            execution_price = result.price
+            logger.info(f"[_execute_crossover_trade]: Crossover trade executed successfully | {direction} | ticket: {result.order} | executed_price: {execution_price:.2f}")
             # Send email notification
             self._send_trade_execution_alert(direction, execution_price, ema_9, ema_15, result)
         else:
@@ -220,9 +216,11 @@ class XAUUSD_9_15_4H:
         
         return result
 
+
     # ========================
     # SINGLE TICK CHECK
     # ========================
+    # amazonq-ignore-next-line
     def _check_tick(self):
         from datetime import datetime, timezone
         
@@ -234,10 +232,11 @@ class XAUUSD_9_15_4H:
         current_price = tick.bid
         ema_15        = self._get_ema_15()
         ema_9         = self._get_ema_9()
-        distance      = abs(current_price - ema_15)
+        distance      = abs(ema_9 - ema_15)
         current_time  = datetime.now(timezone.utc)
+        spread        = round(((ema_9 / ema_15) - 1) * 100, 4)
 
-        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
+        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | spread: {spread} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
 
         # Check for EMA9/15 crossover
         if self._prev_ema9 is not None and self._prev_ema15 is not None:
@@ -296,15 +295,59 @@ class XAUUSD_9_15_4H:
                 self._send_touch_alert(current_price, ema_15, distance)
                 self._last_real_alert_time = current_time
         else:
-            logger.info(f"[_check_tick]: Price outside touch buffer | distance: {distance:.2f} points")
+            logger.info(f"[_check_tick][{self.SYMBOL}]: Price outside touch buffer | distance: {distance:.2f} points")
+
+
+    # ========================
+    # BACKTEST
+    # ========================
+    def backtest(self, start_date: str, end_date: str):
+        from datetime import datetime, timezone
+        import os
+# amazonq-ignore-next-line
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end_dt   = datetime.strptime(end_date,   "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+        rates = mt5.copy_rates_range(self.SYMBOL, self.TIMEFRAME, start_dt, end_dt)
+        if rates is None or len(rates) < 15:
+            logger.error(f"[backtest]: Not enough data for range {start_date} to {end_date}")
+            return
+
+        df = pd.DataFrame(rates)
+        df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+
+        rows = []
+        prev_ema9, prev_ema15 = None, None
+
+        for i in range(15, len(df)):
+            slice_df = df.iloc[:i + 1]
+            ema9  = _calculate_ema_mt5(slice_df, 9,  "close")
+            ema15 = _calculate_ema_mt5(slice_df, 15, "close")
+
+            if prev_ema9 is not None and prev_ema15 is not None:
+                if ema9 > ema15 and prev_ema9 <= prev_ema15:
+                    rows.append({"Datetime": df.iloc[i]["time"], "EMA9": round(ema9, 2), "EMA15": round(ema15, 2), "Signal": "BUY"})
+                elif ema9 < ema15 and prev_ema9 >= prev_ema15:
+                    rows.append({"Datetime": df.iloc[i]["time"], "EMA9": round(ema9, 2), "EMA15": round(ema15, 2), "Signal": "SELL"})
+
+            prev_ema9, prev_ema15 = ema9, ema15
+
+        result_df = pd.DataFrame(rows, columns=["Datetime", "EMA9", "EMA15", "Signal"])
+
+        filename = f"xauusd_9_15_backtest_{start_date}_{end_date}.csv"
+        # amazonq-ignore-next-line
+        output_path = os.path.join(os.path.dirname(__file__), filename)
+        result_df.to_csv(output_path, index=False)
+        logger.info(f"[backtest]: Saved {output_path} | crossover signals: {len(result_df)}")
+        return output_path
 
     # ========================
     # MAIN LOOP
     # ========================
     def run(self):
         logger.info(
-            f"[run]: EMA200 touch monitor started | symbol: {self.SYMBOL} | "
-            f"[run]: timeframe: M5 | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
+            f"[run]: EMA200 touch monitor started | symbol: {self.SYMBOL}.\n"
+            f"[run]: timeframe: {self.TIMEFRAME} | buffer: {self.TOUCH_BUFFER} points | poll interval: {self.POLL_INTERVAL}s"
         )
         while True:
             try:
@@ -318,15 +361,15 @@ class XAUUSD_9_15_4H:
 # ENTRY POINT
 # ========================
 if __name__ == "__main__":
-    monitor = XAUUSD_9_15_4H()
+    monitor = XAUUSD_9_15_5M_sentiment_1H()
     if not monitor.connect():
         exit(1)
     try:
         prevent_sleep()  # Enable sleep prevention
         logger.info("Starting XAUUSD monitor with sleep prevention enabled")
         monitor.run()
-        # monitor.backtest_24h()
+        # monitor.backtest("2026-01-01", "2026-07-01")
     finally:
         allow_sleep()  # Restore normal sleep behavior
         mt5.shutdown()
-        logger.info("MT5 shutdown")
+        logger.info("[XAUUSD_9_15_5M_sentiment_1H]: MT5 shutdown")

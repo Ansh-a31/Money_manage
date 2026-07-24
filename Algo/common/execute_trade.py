@@ -57,9 +57,9 @@ if __name__ == "__main__":
     try:
         _execute_instant__order(
             order_type = mt5.ORDER_TYPE_BUY,
-            symbol = "BTCUSDz",
-            LOT_SIZE = 0.5,
-            reason = "Experimenting: Buy sentiment at 1D and also 4H showing upward moment"
+            symbol = "XAUUSDz",
+            LOT_SIZE = 0.1,
+            reason = "Experimenting: SELL sentiment at 1D but 4H showing upward moment with bullish flag pattern at 21/07/2026"
             )
         # monitor.backtest_24h()
     finally:
