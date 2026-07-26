@@ -12,7 +12,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
-from Algo.common.common import _calculate_ema_mt5, prevent_sleep, allow_sleep
+from Algo.common.common import prevent_sleep, allow_sleep, _calculate_ema_short
 from Algo.credentials import login, password, server
 from Algo.logger import logger
 from communication.send_email import send_email_price_alert
@@ -57,6 +57,29 @@ class XAUUSD_9_15_5M_sentiment_1H:
         logger.info("[connect]: Connected to MT5 successfully")
         return True
 
+
+    def _calculate_ema_mt5(df: pd.DataFrame, period: int, close_col: str = "close") -> float:
+        """
+        Replicates MT5/Exness EMA exactly:
+        - Seeds with SMA of first `period` candles
+        - Then applies EMA multiplier: alpha = 2 / (period + 1)
+        - adjust=False, min_periods=period
+        """
+        if len(df) < period:
+            raise ValueError(f"DataFrame must contain at least {period} candles")
+
+        close_prices = df[close_col].astype(float).values
+
+        # Seed: SMA of first `period` values (exactly how MT5 initializes)
+        ema = float(close_prices[:period].mean())
+        alpha = 2.0 / (period + 1)
+
+        for price in close_prices[period:]:
+            ema = alpha * price + (1 - alpha) * ema
+
+        return ema
+
+
     # ========================
     # EMA 15 CALCULATION
     # ========================
@@ -66,7 +89,7 @@ class XAUUSD_9_15_5M_sentiment_1H:
             logger.error(f"[_get_ema_15]: Not enough candle data for EMA 15 | received: {len(rates) if rates is not None else 0}")
             raise ValueError("Not enough candle data for EMA 15")
         df = pd.DataFrame(rates)
-        ema = _calculate_ema_mt5(df, 15, "close") + 3        # adding 5 points to EMA15 to create a buffer zone for matching exact value
+        ema = self._calculate_ema_mt5(df, 15, "close") + 3        # adding 5 points to EMA15 to create a buffer zone for matching exact value
         logger.debug(f"[_get_ema_15]: EMA15 calculated: {ema:.2f}")
         return ema
 
@@ -79,7 +102,7 @@ class XAUUSD_9_15_5M_sentiment_1H:
             logger.error(f"[_get_ema_9]: Not enough candle data for EMA 9 | received: {len(rates) if rates is not None else 0}")
             raise ValueError("Not enough candle data for EMA 9")
         df = pd.DataFrame(rates)
-        ema = _calculate_ema_mt5(df, 9, "close")
+        ema = self._calculate_ema_mt5(df, 9, "close")
         logger.debug(f"[_get_ema_9]: EMA9 calculated: {ema:.2f}")
         return ema 
 
@@ -304,7 +327,7 @@ class XAUUSD_9_15_5M_sentiment_1H:
     def backtest(self, start_date: str, end_date: str):
         from datetime import datetime, timezone
         import os
-# amazonq-ignore-next-line
+
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         end_dt   = datetime.strptime(end_date,   "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
@@ -321,8 +344,8 @@ class XAUUSD_9_15_5M_sentiment_1H:
 
         for i in range(15, len(df)):
             slice_df = df.iloc[:i + 1]
-            ema9  = _calculate_ema_mt5(slice_df, 9,  "close")
-            ema15 = _calculate_ema_mt5(slice_df, 15, "close")
+            ema9  = self._calculate_ema_mt5(slice_df, 9,  "close")
+            ema15 = self._calculate_ema_mt5(slice_df, 15, "close")
 
             if prev_ema9 is not None and prev_ema15 is not None:
                 if ema9 > ema15 and prev_ema9 <= prev_ema15:
@@ -333,9 +356,9 @@ class XAUUSD_9_15_5M_sentiment_1H:
             prev_ema9, prev_ema15 = ema9, ema15
 
         result_df = pd.DataFrame(rows, columns=["Datetime", "EMA9", "EMA15", "Signal"])
+        result_df["Datetime"] = result_df["Datetime"].dt.tz_convert("Asia/Kolkata").dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        filename = f"xauusd_9_15_backtest_{start_date}_{end_date}.csv"
-        # amazonq-ignore-next-line
+        filename = f"btc_9_15_backtest_{start_date}_{end_date}.csv"
         output_path = os.path.join(os.path.dirname(__file__), filename)
         result_df.to_csv(output_path, index=False)
         logger.info(f"[backtest]: Saved {output_path} | crossover signals: {len(result_df)}")
@@ -357,19 +380,19 @@ class XAUUSD_9_15_5M_sentiment_1H:
             time.sleep(self.POLL_INTERVAL)
 
 
-# # ========================
-# # ENTRY POINT
-# # ========================
-# if __name__ == "__main__":
-#     monitor = XAUUSD_9_15_5M_sentiment_1H()
-#     if not monitor.connect():
-#         exit(1)
-#     try:
-#         prevent_sleep()  # Enable sleep prevention
-#         logger.info("Starting XAUUSD monitor with sleep prevention enabled")
-#         # monitor.run()
-#         monitor.backtest("2026-07-19", "2026-07-20")
-#     finally:
-#         allow_sleep()  # Restore normal sleep behavior
-#         mt5.shutdown()
-#         logger.info("[XAUUSD_9_15_5M_sentiment_1H]: MT5 shutdown")
+# ========================
+# ENTRY POINT
+# ========================
+if __name__ == "__main__":
+    monitor = XAUUSD_9_15_5M_sentiment_1H()
+    if not monitor.connect():
+        exit(1)
+    try:
+        prevent_sleep()  # Enable sleep prevention
+        logger.info("Starting XAUUSD monitor with sleep prevention enabled")
+        # monitor.run()
+        monitor.backtest("2026-07-19", "2026-07-26")
+    finally:
+        allow_sleep()  # Restore normal sleep behavior
+        mt5.shutdown()
+        logger.info("[XAUUSD_9_15_5M_sentiment_1H]: MT5 shutdown")

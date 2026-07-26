@@ -235,7 +235,7 @@ class BTCUSD_9_15_4H:
         current_time  = datetime.now(timezone.utc)
         spread        = round(((ema_9 / ema_15) - 1) * 100, 4)
 
-        logger.info(f"[_check_tick]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | spread: {spread} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
+        logger.info(f"[_check_tick][4H]: Price: {current_price:.2f} | EMA9: {ema_9:.2f} | EMA15: {ema_15:.2f} | spread: {spread} | Distance: {distance:.2f} | Buffer: {self.TOUCH_BUFFER}")
 
         # Check for EMA9/15 crossover
         if self._prev_ema9 is not None and self._prev_ema15 is not None:
