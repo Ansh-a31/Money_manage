@@ -16,8 +16,11 @@ from database import mongo_client
 SYMBOL       = "BTCUSDz"
 TIMEFRAME    = mt5.TIMEFRAME_M1
 TOUCH_BUFFER = 50.0   
-POLL_INTERVAL = 60     
+POLL_INTERVAL = 10     
 NUM_CANDLES = 1000
+ALERT_COOLDOWN_SECONDS = 180  # 3 minutes cooldown between email alerts
+
+_last_alert_time = 0.0
 
 def connect() -> bool:
     if not mt5.initialize():
@@ -37,11 +40,27 @@ def _get_ema_200() -> float:
         raise ValueError("Not enough candle data for EMA 200")
     df = pd.DataFrame(rates)
     ema = _calculate_ema_mt5(df, 200, "close")
-    logger.debug(f"[_get_ema_200]: EMA200 calculated: {ema:.2f}")
+    logger.info(f"[_get_ema_200]: EMA200 calculated: {ema:.2f}")
     return ema
 
+def _get_ema_200() -> float:
+    rates = mt5.copy_rates_from_pos(SYMBOL, TIMEFRAME, 0, NUM_CANDLES)
+    if rates is None or len(rates) < 200:
+        logger.error(f"[_get_ema_200]: Not enough candle data for EMA 200 | received: {len(rates) if rates is not None else 0}")
+        raise ValueError("Not enough candle data for EMA 200")
+    df = pd.DataFrame(rates)
+    ema = _calculate_ema_mt5(df, 200, "close")
+    logger.info(f"[_get_ema_200]: EMA200 calculated: {ema:.2f}")
+    return ema
 
 def _send_touch_alert(current_price: float, ema: float, distance: float):
+    global _last_alert_time
+    now = time.time()
+    if (now - _last_alert_time) < ALERT_COOLDOWN_SECONDS:
+        remaining = int(ALERT_COOLDOWN_SECONDS - (now - _last_alert_time))
+        logger.info(f"[send_touch_alert]: Touch ongoing, alert in cooldown ({remaining}s remaining)")
+        return
+
     msg = (
         f"btcusd Price Touch Alert!\n\n"
         f"Symbol: {SYMBOL}\n"
@@ -50,12 +69,17 @@ def _send_touch_alert(current_price: float, ema: float, distance: float):
         f"Distance: {distance:.2f} points"
     )
     logger.info(f"[send_touch_alert]: Sending touch alert email | price: {current_price:.2f} | EMA200: {ema:.2f} | distance: {distance:.2f}")
-    send_email_price_alert(msg)
-    logger.info(f"[send_touch_alert]: Email sent successfully. ")
+    success = send_email_price_alert(msg)
+    if success:
+        _last_alert_time = now
+        logger.info(f"[send_touch_alert]: Email sent successfully.")
+    else:
+        logger.warning(f"[send_touch_alert]: Email sending failed.")
 
 
 def _check_tick():    
     tick = mt5.symbol_info_tick(SYMBOL)
+    logger.info(f"[_check_tick]: Attempting to get tick for {SYMBOL}.")
     if tick is None:
         logger.warning(f"[_check_tick]: Failed to get tick for {SYMBOL}, retrying...")
         return
@@ -69,7 +93,7 @@ def _check_tick():
     distance = abs(current_price - ema_200)
     if distance <= TOUCH_BUFFER:
         _send_touch_alert(current_price, ema_200, distance)
-
+    logger.info(f"[_check_tick]: Current price: {current_price:.2f}, EMA200: {ema_200:.2f}, Distance: {distance:.2f} points")
 
 
 # ========================
@@ -192,8 +216,8 @@ if __name__ == "__main__":
     try:
         prevent_sleep()  # Enable sleep prevention
         logger.info("Starting btcusd monitor with sleep prevention enabled")
-        # run()
-        backtest("2026-10-21", "2026-10-22")
+        run()
+        # backtest("2026-10-21", "2026-10-22")
     finally:
         allow_sleep()  # Restore normal sleep behavior
         mt5.shutdown()
