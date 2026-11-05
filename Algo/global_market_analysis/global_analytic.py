@@ -109,13 +109,16 @@ def global_stock_analyzer(symbols):
             if symbol_data is not None:
                 ma_5 = calculate_ma(symbol_data, 5)
                 ma_15 = calculate_ma(symbol_data, 15)
-                if abs(ma_15 - ma_5) < 0.5:
+                if symbol in ["EURUSDz", "AUDUSDz", "GBPUSDz", "NZDUSDz", "USDCHFz", "USDCADz"] and abs(ma_15 - ma_5) < 0.00005:
+                    mongo_client.push(doc={"symbol": symbol,"created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="notification_logs")
+                
+                elif abs(ma_15 - ma_5) < 0.05:
                     mongo_client.push(doc={"symbol": symbol,"created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="notification_logs")
                     # _send_touch_alert(symbol=symbol, current_price=symbol_data['close'].iloc[-1], ema=ma_15, distance=abs(ma_15 - ma_5))
     else:
         logger.warning("[main]: No symbols retrieved.")
         
- 
+
 
 if __name__ == "__main__":
     if not connect():
