@@ -4,3 +4,4 @@ class CollectionNameRegistry:
     CROSSOVER_DETECTED = "crossover_detected"
     INSTANT_TRADE = "instant_trade"
     PREVIOUS_EMA_VALUE = "previous_ema_value"
+    NOTIFICATION_LOGS = "notification_logs"
