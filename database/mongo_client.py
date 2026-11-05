@@ -83,3 +83,11 @@ def update(query=None, update_doc=None, collection_name=None):
     collection = db[collection_name]
     result = collection.update_one(query, {"$set": update_doc})
     logger.info(f"[{datetime.now()}]: [update_mongo] Matched: {result.matched_count} | Modified: {result.modified_count}")
+
+
+def fetch_all(query=None, collection_name=None):
+    client = MongoClient('mongodb://localhost:27017/')
+    db = client['Money_Manage']
+    collection = db[collection_name]
+    results = collection.find(query)
+    return list(results)

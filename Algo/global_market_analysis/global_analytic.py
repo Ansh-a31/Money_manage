@@ -73,8 +73,14 @@ def get_symbol_data(symbol: str, timeframe: int, num_candles: int):
 
 def get_specific_symbols() -> list[str]:
     symbols = get_all_symbols()
-    return [s for s in symbols if "XAUUSD" in s.upper()]
-
+    name = "ZTO"
+    temp= [s for s in symbols if name in s.upper()]
+    logger.info(f"[get_specific_symbols]: Retrieved {temp}")
+    previous_data = mongo_client.fetch_last(query={"symbol": temp[0]}, collection_name="exness_symbols")
+    if not previous_data:
+        mongo_client.push(doc={"exness_name": name, "symbol": temp[0],}, collection_name="exness_symbols")
+    else:
+        pass
 
 def get_all_symbols() -> list:
     symbols = mt5.symbols_get()
@@ -86,18 +92,18 @@ def get_all_symbols() -> list:
     return symbol_names
 
 
-def global_stock_analyzer():
-    symbols = get_specific_symbols()
+def global_stock_analyzer(symbols):
+    # symbols = get_specific_symbols()
     # import ipdb;ipdb.set_trace()
     if symbols:
         logger.info(f"[main]: Retrieved symbols count: {len(symbols)}")
-
+        exness_symbols = mongo_client.fetch_all(query={"is_active": True}, collection_name="exness_symbols")
+        exness_symbols_list = [item['symbol'] for item in exness_symbols]
         for symbol in symbols:
             logger.info(f"[main]: Processing symbol: {symbol}")
 
-
-            # if symbol != "XAUUSDz":                       # for checking any specific symbol
-            #     continue
+            if symbol not in exness_symbols_list:                       # for checking any specific symbol
+                continue
 
             symbol_data = get_symbol_data(symbol, TIMEFRAME, NUM_CANDLES)
             if symbol_data is not None:
@@ -117,10 +123,11 @@ if __name__ == "__main__":
         exit(1)
 
     try:
+        symbols = get_all_symbols()
         while True:
-            global_stock_analyzer()
+            global_stock_analyzer(symbols)
             logger.info("[main]: Sleeping for 60 seconds before next analysis.")
-            time.sleep(1)  # Sleep for 60 seconds before next analysis
+            time.sleep(60)  # Sleep for 60 seconds before next analysis
     except Exception as e:
         logger.exception(f"[main]: Exception occurred: {e}")
     finally:
