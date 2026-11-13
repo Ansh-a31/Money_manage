@@ -182,37 +182,6 @@ def global_stock_analyzer(symbol):
         logger.warning("[main]: No symbols retrieved.")
 
 
-# def update_stop_loss(symbol, positions,new_sl):
-
-#     for pos in positions:
-#         request = {
-#             "action": mt5.TRADE_ACTION_SLTP,
-#             "position": pos.ticket,
-#             "sl": new_sl,
-#             "tp": pos.tp,
-#             "symbol": symbol,
-#         }
-#         result = mt5.order_send(request)
-#         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-#             logger.error(f"[update_stop_loss]: Failed to update SL for ticket {pos.ticket} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-#         else:
-#             logger.info(f"[update_stop_loss]: Updated SL for ticket {pos.ticket} to {new_sl:.2f}")
-
-# def handle_open_position(symbol):
-#     positions = mt5.positions_get(symbol=symbol)
-#     if not positions or len(positions) == 0:
-#         logger.info(f"[handle_open_position]: No open positions for {symbol}")
-#         return None
-#     else:
-#         for pos in positions:
-#             profit_loss = pos.profit
-#             if profit_loss >= 100.0:
-#                 update_stop_loss(symbol, positions, pos.price_open)
-#             elif profit_loss >= 50.0:
-#                 update_stop_loss(symbol, positions, pos.price_open)
-#             elif profit_loss >= 5.0:
-#                 update_stop_loss(symbol, positions, pos.price_open)
-#         return positions
 
 if __name__ == "__main__":
     if not connect_mt5():
