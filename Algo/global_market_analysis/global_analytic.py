@@ -57,7 +57,7 @@ def calculate_ma(symbol_data: pd.DataFrame, period: int, close_col: str = "close
         logger.error(f"[calculate_ma]: Not enough data to calculate MA {period} | received: {len(symbol_data) if symbol_data is not None else 0}")
         
     close_prices = symbol_data[close_col].astype(float).values
-    ma = close_prices[-period:].mean()
+    ma = round(float(close_prices[-period:].mean()), 5)
     logger.info(f"[calculate_ma]: MA{period} calculated: {ma:.2f}")
     return ma
 
@@ -112,8 +112,8 @@ def global_stock_analyzer(symbols):
                 if symbol in ["EURUSDz", "AUDUSDz", "GBPUSDz", "NZDUSDz", "USDCHFz", "USDCADz"] and abs(ma_15 - ma_5) < 0.00005:
                     mongo_client.push(doc={"symbol": symbol,"created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="notification_logs")
                 
-                elif abs(ma_15 - ma_5) < 0.05:
-                    mongo_client.push(doc={"symbol": symbol,"created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="notification_logs")
+                elif symbol not in ["EURUSDz", "AUDUSDz", "GBPUSDz", "NZDUSDz", "USDCHFz", "USDCADz"] and abs(ma_15 - ma_5) < 0.05:
+                    mongo_client.push(doc={"symbol": symbol,"5_EMA": ma_5, "15_EMA": ma_15, "created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="notification_logs")
                     # _send_touch_alert(symbol=symbol, current_price=symbol_data['close'].iloc[-1], ema=ma_15, distance=abs(ma_15 - ma_5))
     else:
         logger.warning("[main]: No symbols retrieved.")
