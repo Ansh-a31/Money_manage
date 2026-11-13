@@ -13,8 +13,8 @@ from database import mongo_client
 
 TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
-LOT_SIZE = 0.1
-TP_POINTS = 50.0  # Take Profit: 50 dollars price move
+LOT_SIZE = 1
+TP_POINTS = 100.0  
 
 prev_9_ma = None
 prev_21_ma = None
@@ -125,6 +125,7 @@ def _place_order(SYMBOL,order_type):
         logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
         return result
 
+
 def global_stock_analyzer(symbol):
     global prev_9_ma, prev_21_ma
     # symbols = get_specific_symbols()
@@ -179,6 +180,37 @@ def global_stock_analyzer(symbol):
         logger.warning("[main]: No symbols retrieved.")
 
 
+# def update_stop_loss(symbol, positions,new_sl):
+
+#     for pos in positions:
+#         request = {
+#             "action": mt5.TRADE_ACTION_SLTP,
+#             "position": pos.ticket,
+#             "sl": new_sl,
+#             "tp": pos.tp,
+#             "symbol": symbol,
+#         }
+#         result = mt5.order_send(request)
+#         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+#             logger.error(f"[update_stop_loss]: Failed to update SL for ticket {pos.ticket} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+#         else:
+#             logger.info(f"[update_stop_loss]: Updated SL for ticket {pos.ticket} to {new_sl:.2f}")
+
+# def handle_open_position(symbol):
+#     positions = mt5.positions_get(symbol=symbol)
+#     if not positions or len(positions) == 0:
+#         logger.info(f"[handle_open_position]: No open positions for {symbol}")
+#         return None
+#     else:
+#         for pos in positions:
+#             profit_loss = pos.profit
+#             if profit_loss >= 100.0:
+#                 update_stop_loss(symbol, positions, pos.price_open)
+#             elif profit_loss >= 50.0:
+#                 update_stop_loss(symbol, positions, pos.price_open)
+#             elif profit_loss >= 5.0:
+#                 update_stop_loss(symbol, positions, pos.price_open)
+#         return positions
 
 if __name__ == "__main__":
     if not connect_mt5():
@@ -188,6 +220,7 @@ if __name__ == "__main__":
     try:
         prevent_sleep()
         while True:
+            # handle_open_position("BTCUSDz")
             global_stock_analyzer("BTCUSDz")
             logger.info("[main]: Sleeping for 10 seconds before next analysis.")
             time.sleep(5)  # Sleep for 10 seconds before next analysis
