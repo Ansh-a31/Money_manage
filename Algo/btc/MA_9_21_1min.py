@@ -14,6 +14,7 @@ from database import mongo_client
 TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
 LOT_SIZE = 0.1
+TP_POINTS = 50.0  # Take Profit: 50 dollars price move
 
 prev_9_ma = None
 prev_21_ma = None
@@ -96,9 +97,9 @@ def _place_order(SYMBOL,order_type):
         # Get current market price - whatever is available
         price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
         direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
+        tp = round(price + TP_POINTS, 2) if order_type == mt5.ORDER_TYPE_BUY else round(price - TP_POINTS, 2)
         
-        # No SL/TP - execute at market price immediately
-        logger.info(f"[_place_order]: Placing {direction} order at market price | symbol: {SYMBOL} | lot: {LOT_SIZE} | price: {price:.2f}")
+        logger.info(f"[_place_order]: Placing {direction} order at market price | symbol: {SYMBOL} | lot: {LOT_SIZE} | price: {price:.2f} | TP: {tp:.2f}")
         
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -107,7 +108,7 @@ def _place_order(SYMBOL,order_type):
             "type": order_type,
             "price": price,
             "sl": 0.0,  # No SL - manual management
-            "tp": 0.0,  # No TP - manual management
+            "tp": tp,   # 50 dollars Take Profit
             "deviation": 100,  # Larger deviation to ensure execution at any available price
             "magic": 10002,
             "comment": "Order execute",
