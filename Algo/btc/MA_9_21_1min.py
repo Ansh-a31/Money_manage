@@ -13,7 +13,7 @@ from database import mongo_client
 
 TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
-LOT_SIZE = 1
+LOT_SIZE = 0.5
 TP_POINTS = 100.0  
 
 prev_9_ma = None
@@ -130,6 +130,7 @@ def global_stock_analyzer(symbol):
     global prev_9_ma, prev_21_ma
     # symbols = get_specific_symbols()
     # import ipdb;ipdb.set_trace()
+    order_placed = None
     if symbol:
         logger.info(f"[main]: Processing symbol: {symbol}")
 
@@ -152,9 +153,9 @@ def global_stock_analyzer(symbol):
                         else:
                             close_all_positions(symbol)
                             logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
-                            _place_order(symbol, target_type)
+                            order_placed = _place_order(symbol, target_type)
                     else:
-                        _place_order(symbol, target_type)
+                        order_placed = _place_order(symbol, target_type)
                 elif ma_9 < ma_21 and prev_9_ma >= prev_21_ma:
                     direction = "SELL"
                     target_type = mt5.ORDER_TYPE_SELL
@@ -166,14 +167,15 @@ def global_stock_analyzer(symbol):
                         else:
                             close_all_positions(symbol)
                             logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
-                            _place_order(symbol, target_type)
+                            order_placed = _place_order(symbol, target_type)
                     else:
-                        _place_order(symbol, target_type)
+                        order_placed = _place_order(symbol, target_type)
                 else:
                     logger.info(f"[_execute_crossover_trade]: No crossover detected for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
             else:
                 logger.warning(f"[main]: No previous data available for symbol: {symbol}")
-
+            if order_placed:
+                mongo_client.push(doc={"symbol": symbol, "ema9": ma_9, "ema21": ma_21, "direction": direction, "created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="crossover_detected")
             prev_9_ma = ma_9
             prev_21_ma = ma_21
     else:
@@ -222,6 +224,7 @@ if __name__ == "__main__":
         while True:
             # handle_open_position("BTCUSDz")
             global_stock_analyzer("BTCUSDz")
+            # _place_order("BTCUSDz", mt5.ORDER_TYPE_BUY)
             logger.info("[main]: Sleeping for 10 seconds before next analysis.")
             time.sleep(5)  # Sleep for 10 seconds before next analysis
     except Exception as e:
