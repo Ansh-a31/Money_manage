@@ -13,8 +13,8 @@ from database import mongo_client
 
 TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
-LOT_SIZE = 0.5
-TP_POINTS = 100.0  
+LOT_SIZE = 0.1
+TP_POINTS = 200.0  
 
 prev_9_ma = None
 prev_21_ma = None
@@ -111,7 +111,7 @@ def _place_order(SYMBOL,order_type):
             "tp": tp,   # 50 dollars Take Profit
             "deviation": 100,  # Larger deviation to ensure execution at any available price
             "magic": 10002,
-            "comment": "Order execute",
+            "comment": "Script trade",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
