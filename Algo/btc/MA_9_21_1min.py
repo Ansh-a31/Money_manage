@@ -16,7 +16,7 @@ NUM_CANDLES = 100
 LOT_SIZE = 0.1
 TP_POINTS = 200.0
 
-prev_price = None
+prev_9_ma = None
 prev_21_ma = None
 
 def connect_mt5() -> bool:
@@ -120,6 +120,7 @@ def _place_order(SYMBOL,order_type):
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(f"[_place_order]: Order failed | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
             return None
+        _send_trade_execution_alert("BUY")
         reason = f"Crossover at 1 Min trade executed. Direction: {direction}"
         mongo_client.push(doc={"symbol": SYMBOL, "reason": reason, "created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="instant_trade")
         logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
@@ -180,6 +181,21 @@ def global_stock_analyzer(symbol):
             prev_21_ma = ma_21
     else:
         logger.warning("[main]: No symbols retrieved.")
+
+
+def _send_trade_execution_alert(direction: str):
+        """Send email notification when trade is executed"""
+        # Calculate SL and TP from execution price
+        
+        msg = (
+            f"btcusd Trade Executed!\n\n"
+            f"Direction: {direction}\n",
+            f"Lot Size: {LOT_SIZE}\n",
+            f"Time: {datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')}\n",
+            )
+        # logger.info(f"[_send_trade_execution_alert]: Sending trade execution email | {direction} | ticket: {result.order} | price: {execution_price:.2f}")
+        send_email_price_alert(msg)
+        # logger.info(f"[_send_trade_execution_alert]: Trade execution email sent successfully | {direction} | ticket: {result.order}")
 
 
 
