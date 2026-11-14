@@ -11,12 +11,12 @@ from communication.send_email import send_email_price_alert
 from database import mongo_client
 
 
-TIMEFRAME    = mt5.TIMEFRAME_M1
+TIMEFRAME    = mt5.TIMEFRAME_M5
 NUM_CANDLES = 100
 LOT_SIZE = 0.1
-TP_POINTS = 200.0  
+TP_POINTS = 200.0
 
-prev_9_ma = None
+prev_price = None
 prev_21_ma = None
 
 def connect_mt5() -> bool:
