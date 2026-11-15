@@ -11,10 +11,11 @@ from communication.send_email import send_email_price_alert
 from database import mongo_client
 
 
-TIMEFRAME    = mt5.TIMEFRAME_M5
+TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
 LOT_SIZE = 0.1
-TP_POINTS = 200.0
+TP_POINTS = 300.0
+SL_POINTS = 50.0
 
 prev_9_ma = None
 prev_21_ma = None
@@ -98,8 +99,8 @@ def _place_order(SYMBOL,order_type):
         price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
         direction = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
         tp = round(price + TP_POINTS, 2) if order_type == mt5.ORDER_TYPE_BUY else round(price - TP_POINTS, 2)
-        
-        logger.info(f"[_place_order]: Placing {direction} order at market price | symbol: {SYMBOL} | lot: {LOT_SIZE} | price: {price:.2f} | TP: {tp:.2f}")
+        sl = round(price - SL_POINTS, 2) if order_type == mt5.ORDER_TYPE_BUY else round(price + SL_POINTS, 2)
+        logger.info(f"[_place_order]: Placing {direction} order at market price | symbol: {SYMBOL} | lot: {LOT_SIZE} | price: {price:.2f} | TP: {tp:.2f} | SL: {sl:.2f}")
         
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -107,7 +108,7 @@ def _place_order(SYMBOL,order_type):
             "volume": LOT_SIZE,
             "type": order_type,
             "price": price,
-            "sl": 0.0,  # No SL - manual management
+            "sl": sl,  # No SL - manual management
             "tp": tp,   # 50 dollars Take Profit
             "deviation": 100,  # Larger deviation to ensure execution at any available price
             "magic": 10002,
@@ -123,6 +124,7 @@ def _place_order(SYMBOL,order_type):
         _send_trade_execution_alert("BUY")
         reason = f"Crossover at 1 Min trade executed. Direction: {direction}"
         mongo_client.push(doc={"symbol": SYMBOL, "reason": reason, "created_at": datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")}, collection_name="instant_trade")
+        time.sleep(5)  # Sleep for 5 seconds to ensure order execution is processed
         logger.info(f"[_place_order]: Order executed successfully | {direction} | ticket: {result.order} | executed_price: {result.price:.2f}")
         return result
 
@@ -211,7 +213,7 @@ if __name__ == "__main__":
             global_stock_analyzer("BTCUSDz")
             # _place_order("BTCUSDz", mt5.ORDER_TYPE_BUY)
             logger.info("[main]: Sleeping for 10 seconds before next analysis.")
-            time.sleep(5)  # Sleep for 10 seconds before next analysis
+            time.sleep(30)  # Sleep for 10 seconds before next analysis
     except Exception as e:
         logger.exception(f"[main]: Exception occurred: {e}")
     finally:
