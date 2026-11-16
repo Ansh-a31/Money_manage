@@ -14,7 +14,7 @@ from database import mongo_client
 TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
 LOT_SIZE = 0.1
-TP_POINTS = 300.0
+TP_POINTS = 200.0
 SL_POINTS = 50.0
 
 prev_9_ma = None
@@ -146,33 +146,51 @@ def global_stock_analyzer(symbol):
 
             if prev_9_ma is not None and prev_21_ma is not None:
                 if ma_9 > ma_21 and prev_9_ma <= prev_21_ma:
-                    direction = "BUY"
-                    target_type = mt5.ORDER_TYPE_BUY
-                    positions = mt5.positions_get(symbol=symbol)
-                    if positions:
-                        if any(pos.type == target_type for pos in positions):
-                            logger.info(f"[_execute_crossover_trade]: Open {direction} position already exists, skipping.")
-                            return None
+
+                    # for refying the direction and order type
+                    time.sleep(30)  # Sleep for 30 seconds to ensure the crossover is confirmed
+                    ma_9 = calculate_ma(symbol_data, 9)
+                    ma_21 = calculate_ma(symbol_data, 21)
+                    if ma_9 > ma_21 and prev_9_ma <= prev_21_ma:
+                        logger.info(f"[_execute_crossover_trade]: Re-Confirmed crossover for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
+                        direction = "BUY"
+                        target_type = mt5.ORDER_TYPE_BUY
+                        positions = mt5.positions_get(symbol=symbol)
+                        if positions:
+                            if any(pos.type == target_type for pos in positions):
+                                logger.info(f"[_execute_crossover_trade]: Open {direction} position already exists, skipping.")
+                                return None
+                            else:
+                                close_all_positions(symbol)
+                                logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
+                                order_placed = _place_order(symbol, target_type)
                         else:
-                            close_all_positions(symbol)
-                            logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
                             order_placed = _place_order(symbol, target_type)
                     else:
-                        order_placed = _place_order(symbol, target_type)
+                        logger.info(f"[_execute_crossover_trade]: Crossover not confirmed for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
                 elif ma_9 < ma_21 and prev_9_ma >= prev_21_ma:
-                    direction = "SELL"
-                    target_type = mt5.ORDER_TYPE_SELL
-                    positions = mt5.positions_get(symbol=symbol)
-                    if positions:
-                        if any(pos.type == target_type for pos in positions):
-                            logger.info(f"[_execute_crossover_trade]: Open {direction} position already exists, skipping.")
-                            return None
+
+                    # for refying the direction and order type
+                    time.sleep(30)  # Sleep for 30 seconds to ensure the crossover is confirmed
+                    ma_9 = calculate_ma(symbol_data, 9)
+                    ma_21 = calculate_ma(symbol_data, 21)
+                    if ma_9 < ma_21 and prev_9_ma >= prev_21_ma:
+                        logger.info(f"[_execute_crossover_trade]: Re-Confirmed crossover for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
+                        direction = "SELL"
+                        target_type = mt5.ORDER_TYPE_SELL
+                        positions = mt5.positions_get(symbol=symbol)
+                        if positions:
+                            if any(pos.type == target_type for pos in positions):
+                                logger.info(f"[_execute_crossover_trade]: Open {direction} position already exists, skipping.")
+                                return None
+                            else:
+                                close_all_positions(symbol)
+                                logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
+                                order_placed = _place_order(symbol, target_type)
                         else:
-                            close_all_positions(symbol)
-                            logger.info(f"[_execute_crossover_trade]: Opposite position closed, proceeding with {direction}.")
                             order_placed = _place_order(symbol, target_type)
                     else:
-                        order_placed = _place_order(symbol, target_type)
+                        logger.info(f"[_execute_crossover_trade]: Crossover not confirmed for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
                 else:
                     logger.info(f"[_execute_crossover_trade]: No crossover detected for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
             else:
@@ -212,8 +230,9 @@ if __name__ == "__main__":
             # handle_open_position("BTCUSDz")
             global_stock_analyzer("BTCUSDz")
             # _place_order("BTCUSDz", mt5.ORDER_TYPE_BUY)
-            logger.info("[main]: Sleeping for 10 seconds before next analysis.")
-            time.sleep(30)  # Sleep for 10 seconds before next analysis
+            logger.info("[main]: Sleeping for 30 seconds before next analysis.")
+            logger.info("[main]:-------------------------------------------------------------------------------------------------")
+            time.sleep(30)  # Sleep for 30 seconds before next analysis
     except Exception as e:
         logger.exception(f"[main]: Exception occurred: {e}")
     finally:
