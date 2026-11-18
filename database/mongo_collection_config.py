@@ -6,3 +6,4 @@ class CollectionNameRegistry:
     PREVIOUS_EMA_VALUE = "previous_ema_value"
     NOTIFICATION_LOGS = "notification_logs"
     EXNESS_SYMBOLS = "exness_symbols"
+    ERROR_LOGS = "error_logs"
