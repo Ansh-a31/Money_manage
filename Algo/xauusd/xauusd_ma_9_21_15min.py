@@ -14,8 +14,8 @@ from database import mongo_client
 TIMEFRAME    = mt5.TIMEFRAME_M15
 NUM_CANDLES = 100
 LOT_SIZE = 0.01
-TP_POINTS = 1000.0
-SL_POINTS = 200.0
+TP_POINTS = 200.0
+SL_POINTS = 25.0
 
 prev_9_ma = None
 prev_21_ma = None
@@ -123,7 +123,7 @@ def _place_order(SYMBOL,order_type):
             "volume": LOT_SIZE,
             "type": order_type,
             "price": price,
-            "sl": sl,  # No SL - manual management
+            "sl": 0.0,  # No SL - manual management
             "tp": tp,   # 50 dollars Take Profit
             "deviation": 100,  # Larger deviation to ensure execution at any available price
             "magic": 10002,
@@ -218,7 +218,6 @@ def global_stock_analyzer(symbol):
         logger.warning("[main]: No symbols retrieved.")
 
 
-
 def handle_trailing_sl(position):
     symbol = position.symbol
     # volume = position.volume
@@ -230,7 +229,7 @@ def handle_trailing_sl(position):
 
     if current_profit > 90:
         if is_buy:
-            new_sl = open_price + 800
+            new_sl = open_price + 80
             if position.sl < new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
@@ -263,7 +262,7 @@ def handle_trailing_sl(position):
 
     elif current_profit > 80:
         if is_buy:
-            new_sl = open_price + 700
+            new_sl = open_price + 70
             if position.sl < new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
@@ -279,7 +278,7 @@ def handle_trailing_sl(position):
                     logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
 
         else:
-            new_sl = open_price - 700
+            new_sl = open_price - 70
             if position.sl > new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
@@ -296,7 +295,7 @@ def handle_trailing_sl(position):
 
     elif current_profit > 70:
         if is_buy:
-            new_sl = open_price + 600
+            new_sl = open_price + 60
             if position.sl < new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
@@ -312,7 +311,7 @@ def handle_trailing_sl(position):
                     logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
 
         else:
-            new_sl = open_price - 600
+            new_sl = open_price - 60
             if position.sl > new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
@@ -328,138 +327,6 @@ def handle_trailing_sl(position):
                     logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
 
     elif current_profit > 60:
-        if is_buy:
-            new_sl = open_price + 500
-            if position.sl < new_sl:
-                modify_request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "symbol": symbol,
-                    "sl": new_sl,
-                    "position": position.ticket,
-                    "tp":       position.tp,
-                }
-                result = mt5.order_send(modify_request)
-                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                else:
-                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-        else:
-            new_sl = open_price - 500
-            if position.sl > new_sl:
-                modify_request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "symbol": symbol,
-                    "sl": new_sl,
-                    "position": position.ticket,
-                    "tp":       position.tp,
-                }
-                result = mt5.order_send(modify_request)
-                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                else:
-                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-    elif current_profit > 50:
-            if is_buy:
-                new_sl = open_price + 400
-                if position.sl < new_sl:
-                    modify_request = {
-                        "action": mt5.TRADE_ACTION_SLTP,
-                        "symbol": symbol,
-                        "sl": new_sl,
-                        "position": position.ticket,
-                        "tp":       position.tp,
-                    }
-                    result = mt5.order_send(modify_request)
-                    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                        logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                    else:
-                        logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-    
-            else:
-                new_sl = open_price - 400
-                if position.sl > new_sl:
-                    modify_request = {
-                        "action": mt5.TRADE_ACTION_SLTP,
-                        "symbol": symbol,
-                        "sl": new_sl,
-                        "position": position.ticket,
-                        "tp":       position.tp,
-                    }
-                    result = mt5.order_send(modify_request)
-                    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                        logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                    else:
-                        logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-    elif current_profit > 40:
-        if is_buy:
-            new_sl = open_price + 300
-            if position.sl < new_sl:
-                modify_request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "symbol": symbol,
-                    "sl": new_sl,
-                    "position": position.ticket,
-                    "tp":       position.tp,
-                }
-                result = mt5.order_send(modify_request)
-                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                else:
-                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-        else:
-            new_sl = open_price - 300
-            if position.sl > new_sl:
-                modify_request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "symbol": symbol,
-                    "sl": new_sl,
-                    "position": position.ticket,
-                    "tp":       position.tp,
-                }
-                result = mt5.order_send(modify_request)
-                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                else:
-                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-    elif current_profit > 30:
-        if is_buy:
-            new_sl = open_price + 150
-            if position.sl < new_sl:
-                modify_request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "symbol": symbol,
-                    "sl": new_sl,
-                    "position": position.ticket,
-                    "tp":       position.tp,
-                }
-                result = mt5.order_send(modify_request)
-                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                else:
-                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-        else:
-            new_sl = open_price - 150
-            if position.sl > new_sl:
-                modify_request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "symbol": symbol,
-                    "sl": new_sl,
-                    "position": position.ticket,
-                    "tp":       position.tp,
-                }
-                result = mt5.order_send(modify_request)
-                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
-                else:
-                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
-
-    elif current_profit > 20:
         if is_buy:
             new_sl = open_price + 50
             if position.sl < new_sl:
@@ -491,10 +358,43 @@ def handle_trailing_sl(position):
                     logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
                 else:
                     logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+    elif current_profit > 50:
+            if is_buy:
+                new_sl = open_price + 40
+                if position.sl < new_sl:
+                    modify_request = {
+                        "action": mt5.TRADE_ACTION_SLTP,
+                        "symbol": symbol,
+                        "sl": new_sl,
+                        "position": position.ticket,
+                        "tp":       position.tp,
+                    }
+                    result = mt5.order_send(modify_request)
+                    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                        logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                    else:
+                        logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
     
-    elif current_profit > 10:
+            else:
+                new_sl = open_price - 40
+                if position.sl > new_sl:
+                    modify_request = {
+                        "action": mt5.TRADE_ACTION_SLTP,
+                        "symbol": symbol,
+                        "sl": new_sl,
+                        "position": position.ticket,
+                        "tp":       position.tp,
+                    }
+                    result = mt5.order_send(modify_request)
+                    if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                        logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                    else:
+                        logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+    elif current_profit > 40:
         if is_buy:
-            new_sl = open_price + 10
+            new_sl = open_price + 30
             if position.sl < new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
@@ -510,7 +410,106 @@ def handle_trailing_sl(position):
                     logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
 
         else:
-            new_sl = open_price - 10
+            new_sl = open_price - 30
+            if position.sl > new_sl:
+                modify_request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "symbol": symbol,
+                    "sl": new_sl,
+                    "position": position.ticket,
+                    "tp":       position.tp,
+                }
+                result = mt5.order_send(modify_request)
+                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                else:
+                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+    elif current_profit > 30:
+        if is_buy:
+            new_sl = open_price + 15
+            if position.sl < new_sl:
+                modify_request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "symbol": symbol,
+                    "sl": new_sl,
+                    "position": position.ticket,
+                    "tp":       position.tp,
+                }
+                result = mt5.order_send(modify_request)
+                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                else:
+                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+        else:
+            new_sl = open_price - 15
+            if position.sl > new_sl:
+                modify_request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "symbol": symbol,
+                    "sl": new_sl,
+                    "position": position.ticket,
+                    "tp":       position.tp,
+                }
+                result = mt5.order_send(modify_request)
+                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                else:
+                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+    elif current_profit > 20:
+        if is_buy:
+            new_sl = open_price + 5
+            if position.sl < new_sl:
+                modify_request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "symbol": symbol,
+                    "sl": new_sl,
+                    "position": position.ticket,
+                    "tp":       position.tp,
+                }
+                result = mt5.order_send(modify_request)
+                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                else:
+                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+        else:
+            new_sl = open_price - 5
+            if position.sl > new_sl:
+                modify_request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "symbol": symbol,
+                    "sl": new_sl,
+                    "position": position.ticket,
+                    "tp":       position.tp,
+                }
+                result = mt5.order_send(modify_request)
+                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                else:
+                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+    
+    elif current_profit > 10:
+        if is_buy:
+            new_sl = open_price + 1
+            if position.sl < new_sl:
+                modify_request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "symbol": symbol,
+                    "sl": new_sl,
+                    "position": position.ticket,
+                    "tp":       position.tp,
+                }
+                result = mt5.order_send(modify_request)
+                if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                    logger.error(f"[handle_trailing_sl]: Failed to modify SL for {symbol} | retcode: {result.retcode if result else 'None'} | error: {mt5.last_error()}")
+                else:
+                    logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
+
+        else:
+            new_sl = open_price - 1
             if position.sl > new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
