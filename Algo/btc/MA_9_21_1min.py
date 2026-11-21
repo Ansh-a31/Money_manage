@@ -218,7 +218,6 @@ def global_stock_analyzer(symbol):
         logger.warning("[main]: No symbols retrieved.")
 
 
-
 def handle_trailing_sl(position):
     symbol = position.symbol
     # volume = position.volume
