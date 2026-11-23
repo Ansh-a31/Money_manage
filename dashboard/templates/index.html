@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Journey - Trading Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Stock Journey</h1>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#overview" class="nav-item active" data-view="overview">
+          <span class="nav-label">Overview</span>
+        </a>
+        <a href="#calendar" class="nav-item" data-view="calendar">
+          <span class="nav-label">Calendar</span>
+        </a>
+        <a href="#analytics" class="nav-item" data-view="analytics">
+          <span class="nav-label">Analytics</span>
+        </a>
+        <a href="#journal" class="nav-item" data-view="journal">
+          <span class="nav-label">Journal notes</span>
+        </a>
+        <a href="#settings" class="nav-item" data-view="settings">
+          <span class="nav-label">Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status">
+          <span class="status-indicator online" id="mt5Indicator"></span>
+          <span class="status-text" id="system-status-text">Live MT5</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Header -->
+      <header class="content-header">
+        <div class="header-titles">
+          <span class="year-badge">YEAR 2026</span>
+          <h2 class="page-title" id="page-title">Pairs traded</h2>
+        </div>
+
+        <div class="header-actions">
+          <!-- Calendar Date Picker Trigger & Popover -->
+          <div class="date-picker-wrapper">
+            <button class="pill-btn date-filter-btn" id="dateFilterBtn" title="Select time period from calendar">
+              <span id="dateRangeText">Today</span>
+              <svg class="chevron-icon" id="chevronIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </button>
+
+            <!-- Dropdown Calendar Popover -->
+            <div class="date-picker-popover" id="datePickerPopover">
+              <div class="popover-presets">
+                <span class="preset-label">Quick Select:</span>
+                <div class="preset-pills">
+                  <button type="button" class="preset-btn active" data-preset="today">Today</button>
+                  <button type="button" class="preset-btn" data-preset="thisMonth">This Month</button>
+                  <button type="button" class="preset-btn" data-preset="last30">Last 30 Days</button>
+                  <button type="button" class="preset-btn" data-preset="lastMonth">Last Month</button>
+                  <button type="button" class="preset-btn" data-preset="ytd">Jan – Nov 2026</button>
+                  <button type="button" class="preset-btn" data-preset="all2026">All 2026</button>
+                </div>
+              </div>
+
+              <div class="popover-divider"></div>
+
+              <!-- Interactive Month Navigator & Calendar Grid -->
+              <div class="popover-calendar">
+                <div class="calendar-nav-bar">
+                  <button type="button" class="nav-arrow-btn" id="prevMonthBtn" title="Previous month">&lsaquo;</button>
+                  <span class="calendar-current-month" id="calendarCurrentMonth">November 2026</span>
+                  <button type="button" class="nav-arrow-btn" id="nextMonthBtn" title="Next month">&rsaquo;</button>
+                </div>
+                <div class="calendar-weekdays">
+                  <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                </div>
+                <div class="calendar-days-grid" id="popoverCalendarDays">
+                  <!-- Generated via JavaScript -->
+                </div>
+              </div>
+
+              <!-- Range Inputs & Feedback -->
+              <div class="popover-inputs">
+                <div class="date-input-group">
+                  <label>From</label>
+                  <input type="date" id="popoverStartDate">
+                </div>
+                <div class="date-input-group">
+                  <label>To</label>
+                  <input type="date" id="popoverEndDate">
+                </div>
+              </div>
+
+              <div class="popover-footer">
+                <span class="range-hint" id="rangeHintText">Period: Today</span>
+                <div class="popover-actions">
+                  <button type="button" class="pill-btn cancel-btn" id="cancelDatePickerBtn">Cancel</button>
+                  <button type="button" class="pill-btn apply-btn" id="applyDatePickerBtn">Apply Filter</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mode Toggle: Sample data vs Live MT5 -->
+          <button class="pill-btn sample-data-btn" id="sampleDataBtn" title="Toggle between Live MT5 and Sample data">
+            <span class="mode-dot"></span>
+            <span id="sampleDataText">Live MT5</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- View: Overview (Home Screen) -->
+      <section id="view-overview" class="view-section active">
+        <!-- 4 Metric Summary Cards -->
+        <div class="metrics-grid">
+          <!-- Card 1: NET P&L YTD (Special Dark Green Gradient Card) -->
+          <div class="metric-card pnl-card">
+            <div class="metric-label">NET P&L YTD</div>
+            <div class="metric-value pnl-value" id="val-net-pnl">+$8,340</div>
+          </div>
+
+          <!-- Card 2: WIN RATE -->
+          <div class="metric-card standard-card">
+            <div class="metric-label">WIN RATE</div>
+            <div class="metric-value" id="val-win-rate">58%</div>
+          </div>
+
+          <!-- Card 3: PROFIT FACTOR -->
+          <div class="metric-card standard-card">
+            <div class="metric-label">PROFIT FACTOR</div>
+            <div class="metric-value" id="val-profit-factor">1.9</div>
+          </div>
+
+          <!-- Card 4: TOTAL TRADES -->
+          <div class="metric-card standard-card">
+            <div class="metric-label">TOTAL TRADES</div>
+            <div class="metric-value" id="val-total-trades">312</div>
+          </div>
+        </div>
+
+        <!-- Note: Equity curve and Monthly P&L sections are intentionally excluded as requested -->
+
+        <!-- Pairs Traded Table (Full Width) -->
+        <div class="table-card">
+          <div class="table-responsive">
+            <table class="data-table" id="pairsTable">
+              <thead>
+                <tr>
+                  <th class="col-pair">PAIR</th>
+                  <th class="col-trades">TRADES</th>
+                  <th class="col-winrate">WIN RATE</th>
+                  <th class="col-pf">PROFIT FACTOR</th>
+                  <th class="col-pnl">NET P&L</th>
+                  <th class="col-action"></th>
+                </tr>
+              </thead>
+              <tbody id="pairsTableBody">
+                <!-- Dynamically populated from /api/pairs -->
+                <tr>
+                  <td class="col-pair font-semibold">EUR/USD</td>
+                  <td class="col-trades">96</td>
+                  <td class="col-winrate">63%</td>
+                  <td class="col-pf">2.1</td>
+                  <td class="col-pnl text-green">+$2,840</td>
+                  <td class="col-action">
+                    <a href="javascript:void(0)" class="action-link link-primary">Open calendar &rsaquo;</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-pair font-semibold">XAU/USD</td>
+                  <td class="col-trades">48</td>
+                  <td class="col-winrate">60%</td>
+                  <td class="col-pf">2.4</td>
+                  <td class="col-pnl text-green">+$4,310</td>
+                  <td class="col-action">
+                    <a href="javascript:void(0)" class="action-link link-muted">View &rsaquo;</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-pair font-semibold">NAS100</td>
+                  <td class="col-trades">71</td>
+                  <td class="col-winrate">57%</td>
+                  <td class="col-pf">1.6</td>
+                  <td class="col-pnl text-green">+$1,780</td>
+                  <td class="col-action">
+                    <a href="javascript:void(0)" class="action-link link-muted">View &rsaquo;</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-pair font-semibold">BTC/USD</td>
+                  <td class="col-trades">37</td>
+                  <td class="col-winrate">54%</td>
+                  <td class="col-pf">1.3</td>
+                  <td class="col-pnl text-green">+$960</td>
+                  <td class="col-action">
+                    <a href="javascript:void(0)" class="action-link link-muted">View &rsaquo;</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-pair font-semibold">USD/JPY</td>
+                  <td class="col-trades">33</td>
+                  <td class="col-winrate">45%</td>
+                  <td class="col-pf">0.8</td>
+                  <td class="col-pnl text-red">-$430</td>
+                  <td class="col-action">
+                    <a href="javascript:void(0)" class="action-link link-muted">View &rsaquo;</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-pair font-semibold">GBP/JPY</td>
+                  <td class="col-trades">27</td>
+                  <td class="col-winrate">41%</td>
+                  <td class="col-pf">0.6</td>
+                  <td class="col-pnl text-red">-$1,120</td>
+                  <td class="col-action">
+                    <a href="javascript:void(0)" class="action-link link-muted">View &rsaquo;</a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Other Views (Tabs) -->
+      <section id="view-calendar" class="view-section">
+        <div class="card">
+          <h3 class="card-title">Trading Calendar</h3>
+          <p class="sub-muted">Daily breakdown of closed trades and session profits.</p>
+          <div id="calendarContent" style="margin-top: 18px; color: var(--text-light-muted);">
+            Select a pair from the Overview table to inspect trading days.
+          </div>
+        </div>
+      </section>
+
+      <section id="view-analytics" class="view-section">
+        <div class="card">
+          <h3 class="card-title">Analytics</h3>
+          <p class="sub-muted">Live performance analytics across all symbols.</p>
+        </div>
+      </section>
+
+      <section id="view-journal" class="view-section">
+        <div class="card">
+          <h3 class="card-title">Journal Notes</h3>
+          <p class="sub-muted">Observations and trade execution journals.</p>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view-section">
+        <div class="card">
+          <h3 class="card-title">Settings</h3>
+          <p class="sub-muted">MetaTrader 5 connection credentials and API configuration.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
