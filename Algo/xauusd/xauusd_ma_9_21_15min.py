@@ -126,7 +126,7 @@ def _place_order(SYMBOL,order_type):
             "sl": 0.0,  # No SL - manual management
             "tp": tp,   # 50 dollars Take Profit
             "deviation": 100,  # Larger deviation to ensure execution at any available price
-            "magic": 10002,
+            "magic": 10003,
             "comment": "Script trade",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
