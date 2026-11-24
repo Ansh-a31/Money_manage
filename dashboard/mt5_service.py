@@ -27,61 +27,26 @@ def ensure_mt5_connected() -> bool:
 def get_total_profit(from_date, to_date, symbol=None, magic=None):
     """
     Calculate total net profit between from_date and to_date.
-    
-    Parameters:
-        from_date (datetime): Start date
-        to_date (datetime): End date
-        symbol (str, optional): Filter by symbol (e.g. "BTCUSDz")
-        magic (int, optional): Filter by magic number
-    
-    Returns:
-        float: Total net profit (profit + commission + swap)
+    Derives directly from get_symbol_wise_performance for 100% consistency.
     """
-    if not ensure_mt5_connected():
-        print("Failed to connect to MT5")
+    summary = get_symbol_wise_performance(from_date, to_date, magic=magic)
+    if summary is None or summary.empty:
         return 0.0
-
-    deals = mt5.history_deals_get(from_date, to_date)
-    
-    if deals is None or len(deals) == 0:
-        print("No deals found in the given period")
-        return 0.0
-    
-    df = pd.DataFrame(list(deals), columns=deals[0]._asdict().keys())
-    
-    # Optional filters
     if symbol:
-        df = df[df['symbol'] == symbol]
-    if magic is not None:
-        df = df[df['magic'] == magic]
-    
-    if df.empty:
-        return 0.0
-    
-    # Net profit = profit + commission + swap
-    total_profit = df['profit'].sum() + df['commission'].sum() + df['swap'].sum()
-    
-    return round(float(total_profit), 2)
+        summary = summary[summary['symbol'] == symbol]
+        if summary.empty:
+            return 0.0
+    return round(float(summary['net_profit'].sum()), 2)
 
 
 def get_overview_metrics(from_date, to_date, symbol=None, magic=None):
     """
-    Calculates all top overview metrics (Net Profit, Win Rate, Profit Factor, Total Trades)
-    from MT5 history deals between from_date and to_date.
+    Calculates top overview metrics directly from get_symbol_wise_performance,
+    guaranteeing 100% mathematical consistency with the pairs traded table.
     """
-    if not ensure_mt5_connected():
-        return {
-            "status": "error",
-            "message": "Failed to connect to MetaTrader 5 terminal",
-            "net_profit": 0.0,
-            "win_rate": 0.0,
-            "profit_factor": 0.0,
-            "total_trades": 0
-        }
+    summary = get_symbol_wise_performance(from_date, to_date, magic=magic)
 
-    deals = mt5.history_deals_get(from_date, to_date)
-    
-    if deals is None or len(deals) == 0:
+    if summary is None or summary.empty:
         return {
             "status": "success",
             "from_date": str(from_date),
@@ -92,57 +57,40 @@ def get_overview_metrics(from_date, to_date, symbol=None, magic=None):
             "win_rate": 0.0,
             "profit_factor": 0.0,
             "total_trades": 0,
-            "message": "No deals found in the given period"
+            "message": "No closed trades found in the given period"
         }
 
-    df = pd.DataFrame(list(deals), columns=deals[0]._asdict().keys())
-
-    # Optional filters
     if symbol:
-        df = df[df['symbol'] == symbol]
-    if magic is not None:
-        df = df[df['magic'] == magic]
+        summary = summary[summary['symbol'] == symbol]
+        if summary.empty:
+            return {
+                "status": "success",
+                "from_date": str(from_date),
+                "to_date": str(to_date),
+                "symbol": symbol,
+                "magic": magic,
+                "net_profit": 0.0,
+                "win_rate": 0.0,
+                "profit_factor": 0.0,
+                "total_trades": 0,
+                "message": f"No trades found for symbol {symbol}"
+            }
 
-    if df.empty:
-        return {
-            "status": "success",
-            "from_date": str(from_date),
-            "to_date": str(to_date),
-            "symbol": symbol,
-            "magic": magic,
-            "net_profit": 0.0,
-            "win_rate": 0.0,
-            "profit_factor": 0.0,
-            "total_trades": 0,
-            "message": "No deals matching the filter criteria"
-        }
+    # 1. Total Net Profit strictly equal to sum of symbol net_profits
+    total_profit = round(float(summary['net_profit'].sum()), 2)
 
-    # 1. Net Profit (profit + commission + swap)
-    total_profit = round(float(df['profit'].sum() + df['commission'].sum() + df['swap'].sum()), 2)
+    # 2. Total Trades & Overall Win Rate
+    total_trades = int(summary['total_trades'].sum())
+    total_winning = int(summary['winning_trades'].sum())
+    win_rate = round((total_winning / total_trades) * 100, 2) if total_trades > 0 else 0.0
 
-    # 2. Total Trades & Win Rate based on closed positions (entry == 1 or 2 in MT5 deals)
-    if 'entry' in df.columns:
-        closed_df = df[df['entry'].isin([1, 2])]
-        if closed_df.empty:
-            closed_df = df[df['profit'] != 0]
-            if closed_df.empty:
-                closed_df = df
-    else:
-        closed_df = df
-
-    total_trades = len(closed_df)
-
-    trade_pnl = closed_df['profit'] + closed_df['commission'] + closed_df['swap']
-    winning_trades = len(closed_df[trade_pnl > 0])
-    win_rate = round((winning_trades / total_trades) * 100, 2) if total_trades > 0 else 0.0
-
-    # 3. Profit Factor (gross profit / abs(gross loss))
-    gross_profit = float(df[df['profit'] > 0]['profit'].sum())
-    gross_loss = abs(float(df[df['profit'] < 0]['profit'].sum()))
+    # 3. Overall Profit Factor from aggregate gross profit / gross loss
+    gross_profit = float(summary['gross_profit'].sum()) if 'gross_profit' in summary.columns else 0.0
+    gross_loss = float(summary['gross_loss'].sum()) if 'gross_loss' in summary.columns else 0.0
     if gross_loss > 0:
-        profit_factor = round(gross_profit / gross_loss, 2)
+        profit_factor = round(gross_profit / gross_loss, 1)
     else:
-        profit_factor = round(gross_profit, 2) if gross_profit > 0 else 0.0
+        profit_factor = round(gross_profit, 1) if gross_profit > 0 else 0.0
 
     return {
         "status": "success",
@@ -157,13 +105,13 @@ def get_overview_metrics(from_date, to_date, symbol=None, magic=None):
     }
 
 
-
 def get_symbol_wise_performance(from_date, to_date, magic=None):
     """
     Returns symbol-wise performance:
     - Total Trades
     - Win Rate
     - Net P/L
+    - Profit Factor
     """
     if not ensure_mt5_connected():
         print("Failed to connect to MT5")
@@ -200,16 +148,22 @@ def get_symbol_wise_performance(from_date, to_date, magic=None):
         net_profit=('net_profit', 'sum'),
         winning_trades=('net_profit', lambda x: (x > 0).sum()),
         losing_trades=('net_profit', lambda x: (x < 0).sum()),
+        gross_profit=('net_profit', lambda x: float(x[x > 0].sum())),
+        gross_loss=('net_profit', lambda x: float(abs(x[x < 0].sum())))
     ).reset_index()
     
-    # Calculate Win Rate
+    # Calculate Win Rate & Profit Factor per symbol
     summary['win_rate'] = (summary['winning_trades'] / summary['total_trades'] * 100).round(2)
     summary['net_profit'] = summary['net_profit'].round(2)
+    summary['profit_factor'] = summary.apply(
+        lambda r: round(r['gross_profit'] / r['gross_loss'], 1) if r['gross_loss'] > 0 else (round(r['gross_profit'], 1) if r['gross_profit'] > 0 else 0.0),
+        axis=1
+    )
     
     # Sort by highest profit
     summary = summary.sort_values('net_profit', ascending=False).reset_index(drop=True)
     
-    return summary[['symbol', 'total_trades', 'winning_trades', 'losing_trades', 'win_rate', 'net_profit']]
+    return summary
 
 
 SAMPLE_PAIRS_DATA = [
@@ -234,11 +188,12 @@ def get_symbol_wise_records(from_date, to_date, magic=None, force_sample=False):
             for idx, row in summary_df.iterrows():
                 pnl = float(row['net_profit'])
                 pnl_formatted = f"{'+' if pnl >= 0 else '-'}${abs(pnl):,.2f}"
+                pf = float(row.get('profit_factor', 1.9))
                 records.append({
                     "pair": str(row['symbol']),
                     "trades": int(row['total_trades']),
                     "win_rate": float(row['win_rate']),
-                    "profit_factor": 1.9,
+                    "profit_factor": pf,
                     "net_pnl": pnl,
                     "net_pnl_formatted": pnl_formatted,
                     "action_text": "Open calendar >" if idx == 0 else "View >",

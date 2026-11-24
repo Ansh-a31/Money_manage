@@ -15,7 +15,7 @@ TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
 LOT_SIZE = 0.1
 TP_POINTS = 1000.0
-SL_POINTS = 200.0
+SL_POINTS = 20.0
 
 prev_9_ma = None
 prev_21_ma = None
@@ -207,7 +207,7 @@ def global_stock_analyzer(symbol):
                     else:
                         logger.info(f"[_execute_crossover_trade]: Crossover not confirmed for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
                 else:
-                    logger.info(f"[_execute_crossover_trade]: No crossover detected for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}")
+                    logger.info(f"[_execute_crossover_trade]: No crossover detected for {symbol}. Current MA9: {ma_9:.2f}, MA21: {ma_21:.2f}, Max_SL: {SL_POINTS}, Max_Profit: {TP_POINTS}. ")
             else:
                 logger.warning(f"[main]: No previous data available for symbol: {symbol}")
             if order_placed:
