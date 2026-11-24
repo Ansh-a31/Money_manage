@@ -1,3 +1,5 @@
+import socket
+import threading
 import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
@@ -10,6 +12,53 @@ from Algo.logger import logger
 
 
 # ========================
+# AUTOMATIC DASHBOARD SERVER
+# ========================
+def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
+    """Checks whether the dashboard port is already listening."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
+
+def start_dashboard(host: str = "0.0.0.0", port: int = 5000, open_browser: bool = True):
+    """
+    Starts the Stock Journey Dashboard server in a background daemon thread
+    if it is not already running, and optionally opens it in your default browser.
+    """
+    if is_port_in_use(port):
+        logger.info(f"[dashboard]: Dashboard is already running at http://127.0.0.1:{port}")
+        return
+
+    def _run_server():
+        try:
+            from dashboard.server import ThreadedHTTPServer, DashboardAPIHandler
+            server = ThreadedHTTPServer((host, port), DashboardAPIHandler)
+            server.serve_forever()
+        except OSError as e:
+            # Address already in use or port binding collision
+            logger.info(f"[dashboard]: Dashboard server bound or in use: {e}")
+        except Exception as e:
+            logger.warning(f"[dashboard]: Dashboard server stopped: {e}")
+
+    server_thread = threading.Thread(target=_run_server, daemon=True, name="DashboardServerThread")
+    server_thread.start()
+    dashboard_url = f"http://127.0.0.1:{port}"
+    logger.info(f"[dashboard]: Dashboard server started successfully at {dashboard_url}")
+
+    if open_browser:
+        def _open_browser():
+            time.sleep(1.2)
+            try:
+                import webbrowser
+                webbrowser.open(dashboard_url)
+            except Exception:
+                pass
+
+        threading.Thread(target=_open_browser, daemon=True).start()
+
+
+# ========================
 # PREVENT WINDOWS SLEEP
 # ========================
 ES_CONTINUOUS       = 0x80000000
@@ -18,20 +67,25 @@ ES_DISPLAY_REQUIRED = 0x00000002
 
 def prevent_sleep():
     """
-    Prevents Windows from sleeping or turning off display while script runs.
-    Call this function at the start of your script to keep it running even when screen sleeps.
+    Prevents Windows from sleeping or turning off display while script runs,
+    and automatically starts the dashboard server if it's not already running.
     
     Usage:
-        from Algo.common.common import prevent_sleep, allow_sleep
+        from Algo.common.common import prevent_sleep, allow_sleep, start_dashboard
         
-        prevent_sleep()  # Enable sleep prevention
-        # Your script logic here
+        prevent_sleep()  # Enable sleep prevention and start dashboard
         allow_sleep()    # Restore normal sleep behavior (optional, on script exit)
     """
     ctypes.windll.kernel32.SetThreadExecutionState(
         ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
     )
     logger.info("Sleep prevention enabled - script will continue running even when screen sleeps")
+
+    # Automatically start dashboard server in background
+    try:
+        start_dashboard()
+    except Exception as e:
+        logger.warning(f"[prevent_sleep]: Could not auto-start dashboard: {e}")
 
 def allow_sleep():
     """
