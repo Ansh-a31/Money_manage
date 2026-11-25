@@ -320,9 +320,9 @@ if __name__ == "__main__":
                 for pos in positions: 
                     handle_trailing_sl(pos)  # Assuming only one position for simplicity
             # _place_order("GBPUSDz", mt5.ORDER_TYPE_BUY)
-            logger.info("[main]: Sleeping for 5 seconds before next analysis.")
+            logger.info("[main]: Sleeping for 300 seconds before next analysis.")
             logger.info("[main]:-------------------------------------------------------------------------------------------------")
-            time.sleep(5)  # Sleep for 5 seconds before next analysis
+            time.sleep(300)  # Sleep for 5 seconds before next analysis
     except Exception as e:
         logger.exception(f"[main]: Exception occurred: {e}")
     finally:
