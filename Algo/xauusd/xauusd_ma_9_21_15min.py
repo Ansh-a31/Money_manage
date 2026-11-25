@@ -245,7 +245,7 @@ def handle_trailing_sl(position):
                     logger.info(f"[handle_trailing_sl]: SL modified for {symbol} | new SL: {new_sl:.2f}")
 
         else:
-            new_sl = open_price - 800
+            new_sl = open_price - 80
             if position.sl > new_sl:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
