@@ -510,7 +510,7 @@ def handle_trailing_sl(position):
 
         else:
             new_sl = open_price - 1
-            if position.sl > new_sl:
+            if position.sl > new_sl or position.sl == 0.0:
                 modify_request = {
                     "action": mt5.TRADE_ACTION_SLTP,
                     "symbol": symbol,
