@@ -17,7 +17,7 @@ from database import mongo_client
 
 TIMEFRAME    = mt5.TIMEFRAME_M15
 NUM_CANDLES = 100
-LOT_SIZE = 0.05
+LOT_SIZE = 0.1
 TP_POINTS = 1200.0
 SL_POINTS = 120.0
 
