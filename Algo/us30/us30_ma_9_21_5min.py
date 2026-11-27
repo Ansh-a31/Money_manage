@@ -18,8 +18,8 @@ from database import mongo_client
 
 TIMEFRAME    = mt5.TIMEFRAME_M5
 NUM_CANDLES = 100
-LOT_SIZE = 0.1
-TP_POINTS = 10000.0
+LOT_SIZE = 0.2
+TP_POINTS = 5000.0
 SL_POINTS = 120.0
 
 prev_9_ma = None
@@ -313,6 +313,7 @@ if __name__ == "__main__":
 
     try:
         prevent_sleep()
+        # _place_order("US30*10z", mt5.ORDER_TYPE_BUY)
         while True:
             
             global_stock_analyzer("US30z")
@@ -320,7 +321,7 @@ if __name__ == "__main__":
             if positions:
                 for pos in positions: 
                     handle_trailing_sl(pos)  # Assuming only one position for simplicity
-            # _place_order("US30*10z", mt5.ORDER_TYPE_BUY)
+            
             # ans=get_symbols_containing_specific_word("US30")
             # print(ans)
             logger.info("[main]: Sleeping for 60 seconds before next analysis.")
