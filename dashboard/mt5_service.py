@@ -179,7 +179,7 @@ SAMPLE_PAIRS_DATA = [
 def get_symbol_wise_records(from_date, to_date, magic=None, force_sample=False):
     """
     Returns symbol-wise performance as a list of dicts for frontend rendering.
-    If MT5 is live and has deals, uses real MT5 summary; otherwise returns sample dataset.
+    Uses real MT5 summary; only uses sample dataset if explicitly requested via force_sample=True.
     """
     if not force_sample:
         summary_df = get_symbol_wise_performance(from_date, to_date, magic=magic)
@@ -188,7 +188,7 @@ def get_symbol_wise_records(from_date, to_date, magic=None, force_sample=False):
             for idx, row in summary_df.iterrows():
                 pnl = float(row['net_profit'])
                 pnl_formatted = f"{'+' if pnl >= 0 else '-'}${abs(pnl):,.2f}"
-                pf = float(row.get('profit_factor', 1.9))
+                pf = float(row.get('profit_factor', 0.0))
                 records.append({
                     "pair": str(row['symbol']),
                     "trades": int(row['total_trades']),
@@ -200,5 +200,177 @@ def get_symbol_wise_records(from_date, to_date, magic=None, force_sample=False):
                     "action_primary": idx == 0
                 })
             return records
+        return []
 
     return SAMPLE_PAIRS_DATA
+
+
+def get_pair_calendar_data(symbol: str = None, year: int = None, month: int = None, from_date=None, to_date=None, magic=None, force_sample=False) -> dict:
+    """
+    Returns calendar day-by-day P&L and monthly summary statistics for a given trading pair.
+    Fetches real closed deals directly from MetaTrader 5.
+    """
+    import calendar
+
+    now = datetime.now()
+    if year is None:
+        year = now.year
+    if month is None:
+        month = now.month
+
+    # Determine date range for the query
+    if from_date is None or to_date is None:
+        last_day = calendar.monthrange(year, month)[1]
+        query_start = datetime(year, month, 1, 0, 0, 0)
+        query_end = datetime(year, month, last_day, 23, 59, 59)
+    else:
+        query_start = from_date
+        query_end = to_date
+        year = from_date.year
+        month = from_date.month
+
+    month_name = calendar.month_name[month]
+    first_weekday = calendar.weekday(year, month, 1)
+    grid_start_offset = (first_weekday + 1) % 7
+    total_days_in_month = calendar.monthrange(year, month)[1]
+
+    # Empty structure returned if MT5 is not connected or has no trades
+    empty_result = {
+        "status": "success",
+        "source": "live_mt5",
+        "symbol": symbol or "All",
+        "year": year,
+        "month": month,
+        "month_name": month_name,
+        "first_day_offset": grid_start_offset,
+        "total_days_in_month": total_days_in_month,
+        "month_net_pnl": 0.0,
+        "month_net_pnl_formatted": "$0.00",
+        "winning_days": 0,
+        "losing_days": 0,
+        "win_rate": 0.0,
+        "profit_factor": 0.0,
+        "total_trades": 0,
+        "best_day": None,
+        "worst_day": None,
+        "days": {},
+        "message": "No trades found in MT5 for this period"
+    }
+
+    if not ensure_mt5_connected():
+        return empty_result
+
+    deals = mt5.history_deals_get(query_start, query_end)
+    if deals is None or len(deals) == 0:
+        return empty_result
+
+    df = pd.DataFrame(list(deals), columns=deals[0]._asdict().keys())
+    if df.empty or 'symbol' not in df.columns:
+        return empty_result
+
+    # Keep only real trades (exclude balance/deposit/withdrawal)
+    df = df[df['symbol'] != '']
+    if df.empty:
+        return empty_result
+
+    # If no symbol specified, take the most traded symbol in this period
+    if not symbol or symbol == "All":
+        symbol = str(df['symbol'].value_counts().index[0])
+
+    # Match symbol flexibly (e.g. BTCUSDz, BTCUSD, BTC/USD)
+    sym_clean = symbol.replace("/", "").replace(" ", "").upper()
+    df['sym_clean'] = df['symbol'].astype(str).str.replace("/", "").str.replace(" ", "").str.upper()
+    matched_df = df[df['sym_clean'] == sym_clean]
+    if matched_df.empty:
+        matched_df = df[df['sym_clean'].str.startswith(sym_clean.rstrip('Z'))]
+    df = matched_df
+
+    if df.empty:
+        empty_result["symbol"] = symbol
+        return empty_result
+
+    if magic is not None and 'magic' in df.columns:
+        df = df[df['magic'] == magic]
+        if df.empty:
+            empty_result["symbol"] = symbol
+            return empty_result
+
+    # Focus on closed trades (entry == 1)
+    if 'entry' not in df.columns:
+        empty_result["symbol"] = symbol
+        return empty_result
+
+    closes = df[df['entry'] == 1].copy()
+    if closes.empty:
+        empty_result["symbol"] = symbol
+        return empty_result
+
+    closes['net_profit'] = closes['profit'] + closes['commission'] + closes['swap']
+    closes['deal_dt'] = pd.to_datetime(closes['time'], unit='s')
+    closes['day'] = closes['deal_dt'].dt.day
+    closes['date_str'] = closes['deal_dt'].dt.strftime('%Y-%m-%d')
+
+    days_dict = {}
+    for day, group in closes.groupby('day'):
+        day_pnl = round(float(group['net_profit'].sum()), 2)
+        trade_count = int(len(group))
+        days_dict[int(day)] = {
+            "day": int(day),
+            "trades": trade_count,
+            "net_pnl": day_pnl,
+            "net_pnl_formatted": f"{'+' if day_pnl >= 0 else '-'}${abs(day_pnl):,.2f}",
+            "is_profit": day_pnl >= 0
+        }
+
+    total_pnl = round(float(closes['net_profit'].sum()), 2)
+    winning_days = sum(1 for d in days_dict.values() if d['net_pnl'] > 0)
+    losing_days = sum(1 for d in days_dict.values() if d['net_pnl'] < 0)
+    total_trades = int(len(closes))
+    winning_trades = int((closes['net_profit'] > 0).sum())
+    win_rate = round((winning_trades / total_trades * 100), 1) if total_trades > 0 else 0.0
+
+    gp = float(closes[closes['net_profit'] > 0]['net_profit'].sum())
+    gl = abs(float(closes[closes['net_profit'] < 0]['net_profit'].sum()))
+    pf = round(gp / gl, 1) if gl > 0 else (round(gp, 1) if gp > 0 else 0.0)
+
+    # Best and worst days
+    sorted_days = sorted(days_dict.values(), key=lambda x: x['net_pnl'], reverse=True)
+    best_day = None
+    worst_day = None
+    if sorted_days:
+        b = sorted_days[0]
+        best_day = {
+            "day": b['day'],
+            "date": f"{month_name[:3]} {b['day']}",
+            "net_pnl": b['net_pnl'],
+            "net_pnl_formatted": b['net_pnl_formatted']
+        }
+        w = sorted_days[-1]
+        if w['net_pnl'] < 0:
+            worst_day = {
+                "day": w['day'],
+                "date": f"{month_name[:3]} {w['day']}",
+                "net_pnl": w['net_pnl'],
+                "net_pnl_formatted": w['net_pnl_formatted']
+            }
+
+    return {
+        "status": "success",
+        "source": "live_mt5",
+        "symbol": symbol,
+        "year": year,
+        "month": month,
+        "month_name": month_name,
+        "first_day_offset": grid_start_offset,
+        "total_days_in_month": total_days_in_month,
+        "month_net_pnl": total_pnl,
+        "month_net_pnl_formatted": f"{'+' if total_pnl >= 0 else '-'}${abs(total_pnl):,.2f}",
+        "winning_days": winning_days,
+        "losing_days": losing_days,
+        "win_rate": win_rate,
+        "profit_factor": pf,
+        "total_trades": total_trades,
+        "best_day": best_day,
+        "worst_day": worst_day,
+        "days": days_dict
+    }

@@ -237,12 +237,89 @@
       </section>
 
       <!-- Other Views (Tabs) -->
+      <!-- View: Calendar (Pair Deep Dive) -->
       <section id="view-calendar" class="view-section">
-        <div class="card">
-          <h3 class="card-title">Trading Calendar</h3>
-          <p class="sub-muted">Daily breakdown of closed trades and session profits.</p>
-          <div id="calendarContent" style="margin-top: 18px; color: var(--text-light-muted);">
-            Select a pair from the Overview table to inspect trading days.
+        <!-- Calendar Header: Breadcrumb, Pair Name + Month, Month Nav Controls -->
+        <div class="calendar-view-header">
+          <div class="calendar-header-left">
+            <div class="calendar-breadcrumb">
+              <a href="#overview" class="breadcrumb-link" id="calendarBackBtn">Pairs</a>
+              <span class="breadcrumb-sep">&rsaquo;</span>
+              <span class="breadcrumb-current" id="calendarBreadcrumbPair">-</span>
+            </div>
+            <h2 class="calendar-title" id="calendarMainTitle">Trading Calendar</h2>
+          </div>
+
+          <div class="calendar-header-right">
+            <div class="month-nav-group">
+              <button type="button" class="pill-btn nav-month-btn" id="calPrevMonthBtn">&lsaquo;</button>
+              <button type="button" class="pill-btn current-month-btn" id="calMonthPickerBtn">
+                <span id="calCurrentMonthLabel">Current Month</span>
+              </button>
+              <button type="button" class="pill-btn nav-month-btn" id="calNextMonthBtn">&rsaquo;</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2-Column Calendar Layout (Left: Grid, Right: Stats Cards) -->
+        <div class="calendar-view-layout">
+          <!-- Left Column: Big Interactive Month Calendar -->
+          <div class="calendar-grid-card">
+            <div class="calendar-table-header">
+              <span>Sun</span>
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+            </div>
+            <div class="calendar-days-container" id="calendarDaysGrid">
+              <!-- Dynamically populated via JavaScript -->
+            </div>
+            <div class="calendar-footer-legend">
+              <div class="legend-badges">
+                <span class="legend-badge profit-badge">Profit day</span>
+                <span class="legend-badge loss-badge">Loss day</span>
+              </div>
+              <span class="legend-hint">Click a day to open its trades</span>
+            </div>
+          </div>
+
+          <!-- Right Column: Sidebar Stats Cards (No weekday section as requested) -->
+          <div class="calendar-stats-sidebar">
+            <!-- Card 1: Month Net P&L (Large gradient card) -->
+            <div class="stats-card month-pnl-card" id="calMonthPnlCard">
+              <div class="stats-label">MONTH NET P&L</div>
+              <div class="stats-value pnl-value text-green" id="calMonthNetPnl">$0.00</div>
+              <div class="stats-sub" id="calMonthDaysSummary">0 winning days &middot; 0 losing days</div>
+            </div>
+
+            <!-- Row 2: Win Rate & Profit Factor -->
+            <div class="stats-card-row">
+              <div class="stats-card mini-card">
+                <div class="stats-label">WIN RATE</div>
+                <div class="stats-value" id="calWinRate">0%</div>
+              </div>
+              <div class="stats-card mini-card">
+                <div class="stats-label">PROFIT FACTOR</div>
+                <div class="stats-value" id="calProfitFactor">0.0</div>
+              </div>
+            </div>
+
+            <!-- Row 3: Best Day & Worst Day -->
+            <div class="stats-card-row">
+              <div class="stats-card mini-card best-day-card">
+                <div class="stats-label">BEST DAY</div>
+                <div class="stats-value text-green" id="calBestDayVal">$0.00</div>
+                <div class="stats-date-sub" id="calBestDayDate">-</div>
+              </div>
+              <div class="stats-card mini-card worst-day-card">
+                <div class="stats-label">WORST DAY</div>
+                <div class="stats-value text-red" id="calWorstDayVal">$0.00</div>
+                <div class="stats-date-sub" id="calWorstDayDate">-</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

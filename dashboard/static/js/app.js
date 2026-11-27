@@ -15,6 +15,11 @@ const todayDateStr = getTodayDateString(todayDate);
 
 // Global State - Default to Today
 let activeView = 'overview';
+let currentPair = null;
+let calState = {
+  year: todayDate.getFullYear(),
+  month: todayDate.getMonth() + 1 // 1-12
+};
 let pickerState = {
   currentYear: todayDate.getFullYear(),
   currentMonth: todayDate.getMonth(), // 0-indexed
@@ -32,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   initTopActions();
   initDatePicker();
+  initCalendarView();
   checkMT5Health();
   refreshAllDashboardData();
 });
@@ -108,6 +114,10 @@ function switchView(viewName) {
   const pageTitleEl = document.getElementById('page-title');
   if (pageTitleEl && titleMap[viewName]) {
     pageTitleEl.innerText = titleMap[viewName];
+  }
+
+  if (viewName === 'calendar') {
+    loadPairCalendar(currentPair, calState.year, calState.month);
   }
 }
 
@@ -220,6 +230,9 @@ async function fetchPairsData(startDate, endDate) {
     const data = await res.json();
 
     if (data && data.pairs) {
+      if (!currentPair && data.pairs.length > 0) {
+        currentPair = data.pairs[0].pair;
+      }
       renderPairsTable(data.pairs);
     }
   } catch (err) {
@@ -244,14 +257,14 @@ function renderPairsTable(pairs) {
     const actionText = p.action_text || (idx === 0 ? 'Open calendar &rsaquo;' : 'View &rsaquo;');
 
     html += `
-      <tr>
+      <tr class="pair-row" data-pair="${p.pair}" style="cursor: pointer;" title="Click to view calendar for ${p.pair}">
         <td class="col-pair font-semibold">${p.pair}</td>
         <td class="col-trades">${p.trades}</td>
         <td class="col-winrate">${p.win_rate}%</td>
         <td class="col-pf">${p.profit_factor || 1.9}</td>
         <td class="col-pnl ${pnlClass}">${p.net_pnl_formatted || (isPositive ? '+' : '-') + '$' + Math.abs(p.net_pnl).toLocaleString()}</td>
         <td class="col-action">
-          <a href="javascript:void(0)" class="action-link ${actionClass}">
+          <a href="javascript:void(0)" class="action-link ${actionClass}" data-pair="${p.pair}">
             ${actionText}
           </a>
         </td>
@@ -260,6 +273,14 @@ function renderPairsTable(pairs) {
   });
 
   tbody.innerHTML = html;
+
+  // Add click listeners to rows and buttons to open pair calendar
+  tbody.querySelectorAll('.pair-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const pair = row.getAttribute('data-pair');
+      if (pair) openPairCalendar(pair);
+    });
+  });
 }
 
 /**
@@ -383,6 +404,9 @@ function initDatePicker() {
 
       // Fetch live data
       refreshAllDashboardData();
+      if (activeView === 'calendar') {
+        loadPairCalendar(currentPair, calState.year, calState.month, pickerState.startDate, pickerState.endDate);
+      }
     });
   }
 
@@ -535,4 +559,223 @@ function handleDayCellClick(dateStr) {
 
   updateRangeHint();
   renderPickerCalendar();
+}
+
+/**
+ * ============================================================================
+ * Pair Deep Dive Calendar Logic (Matches Figma)
+ * ============================================================================
+ */
+function initCalendarView() {
+  const backBtn = document.getElementById('calendarBackBtn');
+  if (backBtn) {
+    backBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      switchView('overview');
+    });
+  }
+
+  const prevBtn = document.getElementById('calPrevMonthBtn');
+  if (prevBtn) {
+    prevBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      calState.month--;
+      if (calState.month < 1) {
+        calState.month = 12;
+        calState.year--;
+      }
+      loadPairCalendar(currentPair, calState.year, calState.month);
+    });
+  }
+
+  const nextBtn = document.getElementById('calNextMonthBtn');
+  if (nextBtn) {
+    nextBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      calState.month++;
+      if (calState.month > 12) {
+        calState.month = 1;
+        calState.year++;
+      }
+      loadPairCalendar(currentPair, calState.year, calState.month);
+    });
+  }
+
+  // Clicking on month button toggles the date picker for custom range selection
+  const monthPickerBtn = document.getElementById('calMonthPickerBtn');
+  if (monthPickerBtn) {
+    monthPickerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const popover = document.getElementById('datePickerPopover');
+      const chevron = document.getElementById('chevronIcon');
+      if (popover) {
+        const isOpen = popover.classList.contains('open');
+        if (isOpen) {
+          popover.classList.remove('open');
+          if (chevron) chevron.classList.remove('rotate');
+        } else {
+          popover.classList.add('open');
+          if (chevron) chevron.classList.add('rotate');
+          renderPickerCalendar();
+        }
+      }
+    });
+  }
+}
+
+function openPairCalendar(pairName) {
+  if (pairName) currentPair = pairName;
+  const now = new Date();
+  calState.year = now.getFullYear();
+  calState.month = now.getMonth() + 1; // Default to current month as requested
+  switchView('calendar');
+  loadPairCalendar(currentPair, calState.year, calState.month);
+}
+
+async function loadPairCalendar(symbol, year, month, fromDate = null, toDate = null) {
+  try {
+    let url = `/api/pair-calendar?year=${year}&month=${month}`;
+    if (symbol) {
+      url += `&symbol=${encodeURIComponent(symbol)}`;
+    }
+    if (fromDate && toDate) {
+      url += `&from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`;
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to load pair calendar data');
+    const data = await res.json();
+    if (data && data.symbol) {
+      currentPair = data.symbol;
+    }
+    renderPairCalendar(data);
+  } catch (err) {
+    console.warn('Pair calendar load error:', err);
+  }
+}
+
+function renderPairCalendar(data) {
+  if (!data) return;
+
+  // 1. Breadcrumb and Main Title
+  const breadcrumbPair = document.getElementById('calendarBreadcrumbPair');
+  if (breadcrumbPair) breadcrumbPair.innerText = data.symbol;
+
+  const mainTitle = document.getElementById('calendarMainTitle');
+  if (mainTitle) {
+    mainTitle.innerHTML = `${data.symbol} &middot; ${data.month_name} ${data.year}`;
+  }
+
+  // 2. Month Nav Buttons
+  const prevM = data.month === 1 ? 12 : data.month - 1;
+  const prevMonthName = MONTH_NAMES[prevM - 1].slice(0, 3);
+  const prevBtn = document.getElementById('calPrevMonthBtn');
+  if (prevBtn) prevBtn.innerHTML = `&lsaquo; ${prevMonthName}`;
+
+  const currentLabel = document.getElementById('calCurrentMonthLabel');
+  if (currentLabel) {
+    currentLabel.innerText = `${data.month_name.slice(0, 3)} ${data.year}`;
+  }
+
+  const nextM = data.month === 12 ? 1 : data.month + 1;
+  const nextMonthName = MONTH_NAMES[nextM - 1].slice(0, 3);
+  const nextBtn = document.getElementById('calNextMonthBtn');
+  if (nextBtn) nextBtn.innerHTML = `${nextMonthName} &rsaquo;`;
+
+  // 3. Render Month Calendar Grid
+  const grid = document.getElementById('calendarDaysGrid');
+  if (grid) {
+    grid.innerHTML = '';
+
+    // Empty offset slots for Sunday-start grid
+    const offset = (typeof data.first_day_offset === 'number') ? data.first_day_offset : 0;
+    for (let i = 0; i < offset; i++) {
+      const emptySlot = document.createElement('div');
+      emptySlot.className = 'cal-day-cell empty-slot';
+      grid.appendChild(emptySlot);
+    }
+
+    // Days 1 through total_days_in_month
+    const totalDays = data.total_days_in_month || 30;
+    const daysMap = data.days || {};
+
+    for (let day = 1; day <= totalDays; day++) {
+      const dayCell = document.createElement('div');
+      const dayInfo = daysMap[day] || daysMap[String(day)];
+
+      if (dayInfo) {
+        const isProfit = dayInfo.is_profit;
+        dayCell.className = `cal-day-cell ${isProfit ? 'profit-day' : 'loss-day'}`;
+        dayCell.setAttribute('data-day', day);
+        dayCell.innerHTML = `
+          <span class="cal-day-number">${day}</span>
+          <span class="cal-day-pnl">${dayInfo.net_pnl_formatted}</span>
+          <span class="cal-day-trades">${dayInfo.trades} ${dayInfo.trades === 1 ? 'trade' : 'trades'}</span>
+        `;
+      } else {
+        dayCell.className = 'cal-day-cell inactive-day';
+        dayCell.setAttribute('data-day', day);
+        dayCell.innerHTML = `<span class="cal-day-number">${day}</span>`;
+      }
+
+      // Allow clicking day box to highlight it (matches Figma style)
+      dayCell.addEventListener('click', () => {
+        document.querySelectorAll('.cal-day-cell').forEach(c => c.classList.remove('selected-day'));
+        dayCell.classList.add('selected-day');
+      });
+
+      grid.appendChild(dayCell);
+    }
+  }
+
+  // 4. Right Side Stats Cards
+  // Month Net P&L Card
+  const pnlEl = document.getElementById('calMonthNetPnl');
+  const pnlCard = document.getElementById('calMonthPnlCard');
+  if (pnlEl) {
+    pnlEl.innerText = data.month_net_pnl_formatted || (data.month_net_pnl >= 0 ? '+' : '-') + '$' + Math.abs(data.month_net_pnl).toLocaleString();
+    if (data.month_net_pnl >= 0) {
+      pnlEl.className = 'stats-value pnl-value text-green';
+      if (pnlCard) pnlCard.classList.remove('loss-card');
+    } else {
+      pnlEl.className = 'stats-value pnl-value text-red';
+      if (pnlCard) pnlCard.classList.add('loss-card');
+    }
+  }
+
+  const daysSummaryEl = document.getElementById('calMonthDaysSummary');
+  if (daysSummaryEl) {
+    daysSummaryEl.innerHTML = `${data.winning_days || 0} winning days &middot; ${data.losing_days || 0} losing days`;
+  }
+
+  // Win Rate & Profit Factor
+  const winRateEl = document.getElementById('calWinRate');
+  if (winRateEl) {
+    winRateEl.innerText = `${data.win_rate}%`;
+  }
+
+  const pfEl = document.getElementById('calProfitFactor');
+  if (pfEl) {
+    pfEl.innerText = `${data.profit_factor}`;
+  }
+
+  // Best Day & Worst Day
+  const bestValEl = document.getElementById('calBestDayVal');
+  const bestDateEl = document.getElementById('calBestDayDate');
+  if (data.best_day) {
+    if (bestValEl) bestValEl.innerText = data.best_day.net_pnl_formatted;
+    if (bestDateEl) bestDateEl.innerText = data.best_day.date;
+  } else {
+    if (bestValEl) bestValEl.innerText = '$0';
+    if (bestDateEl) bestDateEl.innerText = '-';
+  }
+
+  const worstValEl = document.getElementById('calWorstDayVal');
+  const worstDateEl = document.getElementById('calWorstDayDate');
+  if (data.worst_day) {
+    if (worstValEl) worstValEl.innerText = data.worst_day.net_pnl_formatted;
+    if (worstDateEl) worstDateEl.innerText = data.worst_day.date;
+  } else {
+    if (worstValEl) worstValEl.innerText = '$0';
+    if (worstDateEl) worstDateEl.innerText = '-';
+  }
 }

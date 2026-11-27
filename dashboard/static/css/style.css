@@ -686,7 +686,317 @@ body {
   color: var(--text-muted);
 }
 
+/* ==========================================================================
+   Calendar View (Pair Deep Dive)
+   ========================================================================== */
+.calendar-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+
+.calendar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.breadcrumb-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.breadcrumb-link:hover {
+  color: var(--color-green);
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.breadcrumb-current {
+  color: var(--text-white);
+}
+
+.calendar-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text-white);
+}
+
+.month-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-month-btn, .current-month-btn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-white);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-month-btn:hover, .current-month-btn:hover {
+  background-color: #1a2336;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.calendar-view-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Big Month Calendar Card */
+.calendar-grid-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.calendar-table-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding-bottom: 14px;
+}
+
+.calendar-days-container {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.cal-day-cell {
+  min-height: 90px;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+  cursor: pointer;
+}
+
+.cal-day-cell.empty-slot {
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.cal-day-cell.inactive-day {
+  background-color: #121824;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.cal-day-cell.profit-day {
+  background: linear-gradient(180deg, rgba(16, 44, 34, 0.9) 0%, rgba(10, 30, 23, 0.95) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.cal-day-cell.profit-day:hover {
+  border-color: rgba(34, 197, 94, 0.5);
+  transform: translateY(-2px);
+}
+
+.cal-day-cell.loss-day {
+  background: linear-gradient(180deg, rgba(46, 18, 24, 0.9) 0%, rgba(32, 12, 17, 0.95) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+.cal-day-cell.loss-day:hover {
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateY(-2px);
+}
+
+.cal-day-cell.selected-day {
+  border: 2px solid var(--color-green) !important;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.25);
+}
+
+.cal-day-number {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7d889b;
+  line-height: 1;
+  margin-bottom: auto;
+}
+
+.cal-day-pnl {
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: -0.3px;
+  margin-top: 6px;
+}
+
+.cal-day-trades {
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  margin-top: 2px;
+  color: #8893a7;
+}
+
+.profit-day .cal-day-pnl {
+  color: #34d399;
+}
+
+.profit-day .cal-day-trades {
+  color: rgba(52, 211, 153, 0.85);
+}
+
+.loss-day .cal-day-pnl {
+  color: #f87171;
+}
+
+.loss-day .cal-day-trades {
+  color: rgba(248, 113, 113, 0.85);
+}
+
+/* Legend */
+.calendar-footer-legend {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.legend-badges {
+  display: flex;
+  gap: 10px;
+}
+
+.legend-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.legend-badge.profit-badge {
+  background-color: #123022;
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.legend-badge.loss-badge {
+  background-color: #34181f;
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.legend-hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Sidebar Stats */
+.calendar-stats-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stats-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  padding: 20px;
+}
+
+.month-pnl-card {
+  background: linear-gradient(145deg, rgba(16, 56, 38, 0.95) 0%, rgba(8, 28, 19, 0.98) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  box-shadow: 0 10px 30px rgba(10, 40, 26, 0.3);
+  padding: 24px 22px;
+}
+
+.month-pnl-card.loss-card {
+  background: linear-gradient(145deg, rgba(68, 18, 28, 0.95) 0%, rgba(32, 10, 15, 0.98) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.stats-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.month-pnl-card .stats-label {
+  color: rgba(52, 211, 153, 0.9);
+}
+
+.stats-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text-white);
+}
+
+.month-pnl-card .stats-value {
+  font-size: 38px;
+  margin-bottom: 6px;
+}
+
+.stats-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.stats-card-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.stats-card.mini-card {
+  padding: 18px;
+}
+
+.stats-date-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 /* Responsive */
+@media (max-width: 1100px) {
+  .calendar-view-layout {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 1024px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);

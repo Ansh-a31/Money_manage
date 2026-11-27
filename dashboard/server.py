@@ -25,6 +25,7 @@ from dashboard.mt5_service import (
     get_total_profit,
     get_symbol_wise_performance,
     get_symbol_wise_records,
+    get_pair_calendar_data,
     ensure_mt5_connected
 )
 
@@ -272,6 +273,34 @@ class DashboardAPIHandler(BaseHTTPRequestHandler):
                 "magic": magic,
                 "net_profit": net_profit
             })
+            return
+
+        # 4. Pair Calendar API (Daily breakdown and monthly summary for pair)
+        if path in ("/api/pair-calendar", "/api/calendar", "/api/pair-history"):
+            symbol = params.get("symbol", [None])[0]
+            year_val = params.get("year", [None])[0]
+            month_val = params.get("month", [None])[0]
+            year = int(year_val) if year_val and year_val.isdigit() else datetime.now().year
+            month = int(month_val) if month_val and month_val.isdigit() else datetime.now().month
+
+            from_str = params.get("from_date", [None])[0] or params.get("start_date", [None])[0]
+            to_str = params.get("to_date", [None])[0] or params.get("end_date", [None])[0]
+            from_dt = parse_datetime_param(from_str, is_end=False) if from_str else None
+            to_dt = parse_datetime_param(to_str, is_end=True) if to_str else None
+
+            magic_val = params.get("magic", [None])[0]
+            magic = int(magic_val) if magic_val and magic_val.isdigit() else None
+
+            calendar_data = get_pair_calendar_data(
+                symbol=symbol,
+                year=year,
+                month=month,
+                from_date=from_dt,
+                to_date=to_dt,
+                magic=magic,
+                force_sample=CURRENT_MODE["force_sample"]
+            )
+            self.send_json(calendar_data)
             return
 
         # 404 for unknown endpoints

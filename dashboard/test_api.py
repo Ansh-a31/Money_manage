@@ -17,6 +17,7 @@ from dashboard.mt5_service import (
     get_overview_metrics,
     get_symbol_wise_records,
     get_symbol_wise_performance,
+    get_pair_calendar_data,
     ensure_mt5_connected
 )
 from dashboard.server import parse_datetime_param, DashboardAPIHandler
@@ -59,6 +60,18 @@ class TestDashboardAPI(unittest.TestCase):
         self.assertTrue(os.path.exists(html_file))
         self.assertTrue(os.path.exists(css_file))
         self.assertTrue(os.path.exists(js_file))
+
+    def test_pair_calendar_data(self):
+        cal = get_pair_calendar_data("BTCUSDz", year=2026, month=11)
+        self.assertEqual(cal["status"], "success")
+        self.assertIn("symbol", cal)
+        self.assertIn("month_net_pnl", cal)
+        self.assertIn("winning_days", cal)
+        self.assertIn("losing_days", cal)
+        self.assertIn("win_rate", cal)
+        self.assertIn("profit_factor", cal)
+        self.assertIn("days", cal)
+        self.assertIn("total_days_in_month", cal)
 
 
 if __name__ == "__main__":
