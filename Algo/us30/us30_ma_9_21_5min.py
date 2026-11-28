@@ -255,15 +255,15 @@ def handle_trailing_sl(position):
 
     # (profit_threshold, points_to_lock)
     STEPS = [
-        (90, 800),                 # 80 dollar
-        (80, 700),                 # 70 dollar
-        (70, 600),                 # 60 dollar
-        (60, 500),                 # 50 dollar
-        (50, 400),                  # 40 dollar
-        (40, 300),                  # 30 dollar
-        (30, 200),                  # 20 dollar
-        (20, 50),                  # 5 dollar 
-        (10, 10),                   # 1 dollar
+        (90, 1600),                 # 80 dollar
+        (80, 1400),                 # 70 dollar
+        (70, 1200),                 # 60 dollar
+        (60, 1000),                 # 50 dollar
+        (50, 800),                  # 40 dollar
+        (40, 600),                  # 30 dollar
+        (30, 400),                  # 20 dollar
+        (20, 100),                  # 5 dollar 
+        (10, 20),                   # 1 dollar
     ]
 
     points_to_lock = None

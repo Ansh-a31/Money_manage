@@ -15,7 +15,7 @@ TIMEFRAME    = mt5.TIMEFRAME_M1
 NUM_CANDLES = 100
 LOT_SIZE = 0.1
 TP_POINTS = 1000.0
-SL_POINTS = 20.0
+SL_POINTS = 100.0
 
 prev_9_ma = None
 prev_21_ma = None
